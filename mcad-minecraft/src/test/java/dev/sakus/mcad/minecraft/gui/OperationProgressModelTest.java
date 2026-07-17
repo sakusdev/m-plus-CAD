@@ -6,6 +6,8 @@ package dev.sakus.mcad.minecraft.gui;
 import dev.sakus.mcad.api.ProgressUpdate;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -42,6 +44,22 @@ class OperationProgressModelTest {
         assertEquals(5L, reset.revision());
         assertEquals(OperationProgressModel.State.IDLE, reset.state());
         assertEquals(5L, model.reset().revision());
+    }
+
+    @Test
+    void publishesCancellingStateEvenWhenCancellationActionThrows() {
+        OperationProgressModel model = new OperationProgressModel();
+        List<OperationProgressModel.Snapshot> published = new ArrayList<>();
+        model.subscribe(published::add);
+        model.begin("export", OptionalLong.empty(), "開始", true, () -> {
+            throw new IllegalStateException("cancel hook failed");
+        });
+
+        assertThrows(IllegalStateException.class, model::requestCancellation);
+
+        assertEquals(OperationProgressModel.State.CANCELLING, model.snapshot().state());
+        assertEquals(OperationProgressModel.State.CANCELLING, published.getLast().state());
+        assertEquals(model.snapshot().revision(), published.getLast().revision());
     }
 
     @Test
