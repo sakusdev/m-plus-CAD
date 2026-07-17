@@ -9,13 +9,25 @@ import dev.sakus.mcad.api.ExporterFeature;
 import dev.sakus.mcad.api.ExporterLimits;
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumSet;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExporterCapabilityModelTest {
+    @Test
+    void mapsEveryExporterFeatureExactlyOnce() {
+        EnumSet<ExporterFeature> mapped = EnumSet.noneOf(ExporterFeature.class);
+        for (ExporterCapabilityModel.Control control : ExporterCapabilityModel.Control.values()) {
+            assertTrue(mapped.add(control.requiredFeature()),
+                    () -> "duplicate feature mapping: " + control.requiredFeature());
+        }
+        assertEquals(EnumSet.allOf(ExporterFeature.class), mapped);
+    }
+
     @Test
     void disablesUnsupportedControlsWithExplanation() {
         ExporterCapabilities capabilities = new ExporterCapabilities(
