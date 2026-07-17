@@ -53,6 +53,22 @@ class ProjectSettingsStoreTest {
     }
 
     @Test
+    void rejectsOversizedSettingsFilesBeforeDecoding() throws IOException {
+        Path oversized = temporaryDirectory.resolve("oversized.mcad-settings");
+        try (var output = Files.newOutputStream(oversized)) {
+            output.write(new byte[16 * 1024 * 1024]);
+            output.write(0);
+        }
+        ProjectSettingsStore store = new ProjectSettingsStore(
+                temporaryDirectory,
+                new ProjectSettingsCodec());
+
+        assertThrows(IOException.class, () -> store.load(
+                Path.of("oversized.mcad-settings"),
+                ProjectSettingsFixtures.migrationDefaults()));
+    }
+
+    @Test
     void rejectsSymbolicLinkPathComponentsWhenSupported() throws IOException {
         Path outside = Files.createTempDirectory("mcad-settings-outside-");
         Path link = temporaryDirectory.resolve("linked");
