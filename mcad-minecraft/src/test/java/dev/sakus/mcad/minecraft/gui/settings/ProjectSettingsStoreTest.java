@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class ProjectSettingsStoreTest {
     @TempDir
@@ -58,7 +59,8 @@ class ProjectSettingsStoreTest {
         try {
             Files.createSymbolicLink(link, outside);
         } catch (UnsupportedOperationException | IOException | SecurityException exception) {
-            org.junit.jupiter.api.Assumptions.abort("symbolic links are unavailable: " + exception.getMessage());
+            assumeTrue(false, "symbolic links are unavailable: " + exception.getMessage());
+            return;
         }
 
         ProjectSettingsStore store = new ProjectSettingsStore(
