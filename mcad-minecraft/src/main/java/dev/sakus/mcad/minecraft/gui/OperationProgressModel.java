@@ -157,8 +157,11 @@ public final class OperationProgressModel {
             action = cancellationAction;
             cancellationAction = NO_CANCELLATION;
         }
-        action.run();
-        publish(updated);
+        try {
+            action.run();
+        } finally {
+            publish(updated);
+        }
         return true;
     }
 
