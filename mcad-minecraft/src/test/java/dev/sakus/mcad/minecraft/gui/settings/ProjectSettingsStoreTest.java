@@ -59,6 +59,18 @@ class ProjectSettingsStoreTest {
     }
 
     @Test
+    void rejectsRegularFileAsDirectoryComponent() throws IOException {
+        Files.writeString(temporaryDirectory.resolve("profiles"), "not a directory");
+        ProjectSettingsStore store = new ProjectSettingsStore(
+                temporaryDirectory,
+                new ProjectSettingsCodec());
+
+        assertThrows(IOException.class, () -> store.save(
+                Path.of("profiles", "default.mcad-settings"),
+                ProjectSettingsFixtures.populated()));
+    }
+
+    @Test
     void rejectsOversizedSettingsFilesBeforeDecoding() throws IOException {
         Path oversized = temporaryDirectory.resolve("oversized.mcad-settings");
         try (var output = Files.newOutputStream(oversized)) {
