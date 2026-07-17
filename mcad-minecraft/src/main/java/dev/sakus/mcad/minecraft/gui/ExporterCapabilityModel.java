@@ -20,6 +20,7 @@ public record ExporterCapabilityModel(
         ExporterLimits limits) {
 
     public enum Control {
+        HIERARCHY(ExporterFeature.HIERARCHY, "階層"),
         MULTIPLE_MESHES(ExporterFeature.MULTIPLE_MESHES, "複数メッシュ"),
         MULTIPLE_MATERIALS(ExporterFeature.MULTIPLE_MATERIALS, "複数マテリアル"),
         VERTEX_COLOURS(ExporterFeature.VERTEX_COLOURS, "頂点カラー"),
