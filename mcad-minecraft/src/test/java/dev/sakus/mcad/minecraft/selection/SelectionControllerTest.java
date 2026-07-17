@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,8 +65,9 @@ class SelectionControllerTest {
     void publishesImmutableSnapshotsInRevisionOrder() {
         SelectionController controller = new SelectionController(100L);
         List<Long> revisions = new ArrayList<>();
-        try (SelectionController.Subscription ignored = controller.subscribe(
+        try (SelectionController.Subscription subscription = controller.subscribe(
                 snapshot -> revisions.add(snapshot.revision()))) {
+            assertNotNull(subscription);
             controller.setCorner(TwoPointSelection.Corner.START, new SelectionPoint(0, 0, 0));
             controller.setCorner(TwoPointSelection.Corner.END, new SelectionPoint(0, 0, 0));
         }
