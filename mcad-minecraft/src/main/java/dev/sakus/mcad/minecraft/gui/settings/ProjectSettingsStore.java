@@ -112,12 +112,22 @@ public final class ProjectSettingsStore {
         if (relativePath.isAbsolute()) {
             throw new IllegalArgumentException("settings path must be relative to the project root");
         }
+        String raw = relativePath.toString();
+        if (raw.isBlank()) {
+            throw new IllegalArgumentException("settings path must not be empty");
+        }
+        if (raw.contains("\\") || raw.contains(":")) {
+            throw new IllegalArgumentException("settings path must use portable relative path syntax");
+        }
+        for (Path component : relativePath) {
+            String value = component.toString();
+            if (value.isBlank() || value.equals(".") || value.equals("..")) {
+                throw new IllegalArgumentException("settings path contains an unsafe segment");
+            }
+        }
         Path normalized = relativePath.normalize();
         if (normalized.getNameCount() == 0 || normalized.toString().isBlank()) {
             throw new IllegalArgumentException("settings path must not be empty");
-        }
-        if (normalized.startsWith("..")) {
-            throw new IllegalArgumentException("settings path must not escape the project root");
         }
         Path resolved = root.resolve(normalized).normalize();
         if (!resolved.startsWith(root)) {
