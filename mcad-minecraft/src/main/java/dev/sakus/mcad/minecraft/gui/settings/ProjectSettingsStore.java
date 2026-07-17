@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -31,6 +32,7 @@ public final class ProjectSettingsStore {
         Path normalizedRoot = root.toAbsolutePath().normalize();
         Files.createDirectories(normalizedRoot);
         rejectSymbolicLink(normalizedRoot);
+        requireDirectory(normalizedRoot);
         this.root = normalizedRoot;
     }
 
@@ -42,8 +44,7 @@ public final class ProjectSettingsStore {
         Objects.requireNonNull(settings, "settings");
         Path target = resolveSafe(relativePath);
         Path parent = Objects.requireNonNull(target.getParent(), "settings parent");
-        Files.createDirectories(parent);
-        verifyExistingPathComponents(parent);
+        ensureSafeDirectory(parent);
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             rejectSymbolicLink(target);
             if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
@@ -66,6 +67,7 @@ public final class ProjectSettingsStore {
                 channel.force(true);
             }
             rejectSymbolicLink(temporary);
+            ensureSafeDirectory(parent);
             try {
                 Files.move(
                         temporary,
@@ -136,19 +138,56 @@ public final class ProjectSettingsStore {
         return resolved;
     }
 
+    private void ensureSafeDirectory(Path directory) throws IOException {
+        Path normalized = requireInsideRoot(directory);
+        Path current = root;
+        rejectSymbolicLink(current);
+        requireDirectory(current);
+        Path relative = root.relativize(normalized);
+        for (Path component : relative) {
+            current = current.resolve(component);
+            if (!Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+                try {
+                    Files.createDirectory(current);
+                } catch (FileAlreadyExistsException ignored) {
+                    // Another actor created the component. Validate it below before using it.
+                }
+            }
+            rejectSymbolicLink(current);
+            requireDirectory(current);
+        }
+    }
+
     private void verifyExistingPathComponents(Path path) throws IOException {
+        Path normalized = requireInsideRoot(path);
+        Path current = root;
+        rejectSymbolicLink(current);
+        requireDirectory(current);
+        Path relative = root.relativize(normalized);
+        int index = 0;
+        for (Path component : relative) {
+            current = current.resolve(component);
+            index++;
+            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+                rejectSymbolicLink(current);
+                if (index < relative.getNameCount()) {
+                    requireDirectory(current);
+                }
+            }
+        }
+    }
+
+    private Path requireInsideRoot(Path path) throws IOException {
         Path normalized = path.toAbsolutePath().normalize();
         if (!normalized.startsWith(root)) {
             throw new IOException("path escaped settings root: " + path);
         }
-        Path current = root;
-        rejectSymbolicLink(current);
-        Path relative = root.relativize(normalized);
-        for (Path component : relative) {
-            current = current.resolve(component);
-            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
-                rejectSymbolicLink(current);
-            }
+        return normalized;
+    }
+
+    private static void requireDirectory(Path path) throws IOException {
+        if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("settings path component is not a directory: " + path);
         }
     }
 
