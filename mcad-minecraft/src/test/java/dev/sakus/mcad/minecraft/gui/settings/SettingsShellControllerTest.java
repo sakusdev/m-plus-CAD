@@ -35,10 +35,11 @@ class SettingsShellControllerTest {
 
         assertEquals(SettingsSection.MATERIALS, snapshot.activeSection());
         assertEquals(initial, snapshot.draft().value());
+        assertTrue(snapshot.validation().valid());
     }
 
     @Test
-    void selectingExporterUpdatesOnlyIdAndCapabilityState() {
+    void selectingExporterUpdatesOnlyIdCapabilityStateAndValidation() {
         ProjectSettings initial = ProjectSettingsFixtures.populated();
         SettingsShellController controller = new SettingsShellController(initial);
         ExporterCapabilities capabilities = new ExporterCapabilities(
@@ -63,6 +64,11 @@ class SettingsShellControllerTest {
                 .availability(ExporterCapabilityModel.Control.MULTIPLE_MESHES).enabled());
         assertFalse(snapshot.exporterCapabilities().orElseThrow()
                 .availability(ExporterCapabilityModel.Control.ANIMATION).enabled());
+        assertTrue(snapshot.validation().valid());
+        assertEquals(Set.of("animation.unsupported", "collision.metadata.unsupported"),
+                snapshot.validation().diagnostics().stream()
+                        .map(diagnostic -> diagnostic.code())
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
     @Test
@@ -87,5 +93,6 @@ class SettingsShellControllerTest {
         assertTrue(decoded.settings().selection().preserveEmptyCells());
         assertEquals(decoded.settings(), controller.snapshot().draft().value());
         assertTrue(controller.snapshot().exporterCapabilities().isEmpty());
+        assertTrue(controller.snapshot().validation().valid());
     }
 }
