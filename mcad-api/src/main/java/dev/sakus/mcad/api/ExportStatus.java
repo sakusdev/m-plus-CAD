@@ -1,0 +1,11 @@
+/*
+ * SPDX-License-Identifier: MPL-2.0
+ */
+package dev.sakus.mcad.api;
+
+
+public enum ExportStatus {
+    SUCCESS,
+    FAILED,
+    CANCELLED
+}
