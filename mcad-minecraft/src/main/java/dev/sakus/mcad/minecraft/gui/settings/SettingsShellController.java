@@ -8,6 +8,7 @@ import dev.sakus.mcad.api.ExporterCapabilities;
 import dev.sakus.mcad.api.ProjectSettings;
 import dev.sakus.mcad.minecraft.gui.ExporterCapabilityModel;
 import dev.sakus.mcad.minecraft.gui.SettingsSection;
+import dev.sakus.mcad.minecraft.gui.SettingsValidationModel;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -34,11 +35,13 @@ public final class SettingsShellController {
     public record Snapshot(
             SettingsSection activeSection,
             ProjectSettingsDraft draft,
-            Optional<ExporterCapabilityModel> exporterCapabilities) {
+            Optional<ExporterCapabilityModel> exporterCapabilities,
+            SettingsValidationModel validation) {
         public Snapshot {
             Objects.requireNonNull(activeSection, "activeSection");
             Objects.requireNonNull(draft, "draft");
             exporterCapabilities = Objects.requireNonNull(exporterCapabilities, "exporterCapabilities");
+            Objects.requireNonNull(validation, "validation");
         }
     }
 
@@ -145,7 +148,11 @@ public final class SettingsShellController {
     }
 
     private Snapshot snapshotLocked() {
-        return new Snapshot(activeSection, draft, exporterCapabilities);
+        return new Snapshot(
+                activeSection,
+                draft,
+                exporterCapabilities,
+                SettingsValidationModel.validate(draft.value(), exporterCapabilities));
     }
 
     private void publish(Snapshot updated) {
