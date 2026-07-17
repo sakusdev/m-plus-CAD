@@ -40,7 +40,7 @@ class ProjectSettingsStoreTest {
     }
 
     @Test
-    void rejectsAbsoluteAndTraversalPaths() throws IOException {
+    void rejectsAbsoluteTraversalAndNonPortablePaths() throws IOException {
         ProjectSettingsStore store = new ProjectSettingsStore(
                 temporaryDirectory,
                 new ProjectSettingsCodec());
@@ -48,6 +48,12 @@ class ProjectSettingsStoreTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> store.save(Path.of("..", "escape.mcad-settings"), settings));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.save(Path.of("profiles", "..", "escape.mcad-settings"), settings));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.save(Path.of("profiles\\escape.mcad-settings"), settings));
+        assertThrows(IllegalArgumentException.class,
+                () -> store.save(Path.of("C:escape.mcad-settings"), settings));
         assertThrows(IllegalArgumentException.class,
                 () -> store.save(temporaryDirectory.resolve("absolute.mcad-settings"), settings));
     }
