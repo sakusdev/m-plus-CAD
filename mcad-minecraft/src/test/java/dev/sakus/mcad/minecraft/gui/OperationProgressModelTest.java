@@ -52,6 +52,21 @@ class OperationProgressModelTest {
     }
 
     @Test
+    void failedSecondBeginDoesNotClearExistingCancellation() {
+        OperationProgressModel model = new OperationProgressModel();
+        OperationProgressBridge bridge = new OperationProgressBridge(model);
+        bridge.begin("export", OptionalLong.empty(), "開始", true);
+        assertTrue(model.requestCancellation());
+        assertTrue(bridge.isCancellationRequested());
+
+        assertThrows(IllegalStateException.class,
+                () -> bridge.begin("snapshot", OptionalLong.empty(), "重複開始", true));
+
+        assertTrue(bridge.isCancellationRequested());
+        assertEquals(OperationProgressModel.State.CANCELLING, model.snapshot().state());
+    }
+
+    @Test
     void rejectsInvalidProgressAndConcurrentOperations() {
         OperationProgressModel model = new OperationProgressModel();
         model.begin("export", OptionalLong.of(2L), "開始", false, () -> { });
