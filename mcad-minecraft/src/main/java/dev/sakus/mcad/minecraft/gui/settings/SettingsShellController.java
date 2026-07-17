@@ -12,6 +12,7 @@ import dev.sakus.mcad.minecraft.gui.SettingsValidationModel;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -50,8 +51,12 @@ public final class SettingsShellController {
     }
 
     private final Object lock = new Object();
+    private final Object publishLock = new Object();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
+    private final ArrayDeque<Snapshot> pendingPublications = new ArrayDeque<>();
     private long revision;
+    private long highestQueuedRevision = -1L;
+    private boolean publishing;
     private SettingsSection activeSection = SettingsSection.SELECTION;
     private ProjectSettingsDraft draft;
     private Optional<ExporterCapabilityModel> exporterCapabilities = Optional.empty();
@@ -182,8 +187,49 @@ public final class SettingsShellController {
     }
 
     private void publish(Snapshot updated) {
-        for (Listener listener : listeners) {
-            listener.shellChanged(updated);
+        synchronized (publishLock) {
+            if (updated.revision() <= highestQueuedRevision) {
+                return;
+            }
+            pendingPublications.addLast(updated);
+            highestQueuedRevision = updated.revision();
+            if (publishing) {
+                return;
+            }
+            publishing = true;
+        }
+
+        RuntimeException failure = null;
+        try {
+            while (true) {
+                Snapshot next;
+                synchronized (publishLock) {
+                    next = pendingPublications.pollFirst();
+                    if (next == null) {
+                        publishing = false;
+                        break;
+                    }
+                }
+                for (Listener listener : listeners) {
+                    try {
+                        listener.shellChanged(next);
+                    } catch (RuntimeException exception) {
+                        if (failure == null) {
+                            failure = exception;
+                        } else if (failure != exception) {
+                            failure.addSuppressed(exception);
+                        }
+                    }
+                }
+            }
+        } catch (Error error) {
+            synchronized (publishLock) {
+                publishing = false;
+            }
+            throw error;
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 }
