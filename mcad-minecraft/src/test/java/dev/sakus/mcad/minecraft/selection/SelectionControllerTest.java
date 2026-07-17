@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SelectionControllerTest {
@@ -71,5 +72,39 @@ class SelectionControllerTest {
         controller.clear();
 
         assertEquals(List.of(1L, 2L), revisions);
+    }
+
+    @Test
+    void reentrantUpdatesAreDeliveredAfterCurrentSnapshotToEveryListener() {
+        SelectionController controller = new SelectionController(100L);
+        List<String> events = new ArrayList<>();
+        controller.subscribe(snapshot -> {
+            events.add("first-" + snapshot.revision());
+            if (snapshot.revision() == 1L) {
+                controller.setCorner(TwoPointSelection.Corner.END, new SelectionPoint(1, 1, 1));
+            }
+        });
+        controller.subscribe(snapshot -> events.add("second-" + snapshot.revision()));
+
+        controller.setCorner(TwoPointSelection.Corner.START, new SelectionPoint(0, 0, 0));
+
+        assertEquals(List.of("first-1", "second-1", "first-2", "second-2"), events);
+    }
+
+    @Test
+    void oneListenerFailureDoesNotPreventOtherListenersOrStateUpdate() {
+        SelectionController controller = new SelectionController(100L);
+        List<Long> received = new ArrayList<>();
+        controller.subscribe(snapshot -> {
+            throw new IllegalStateException("listener failed");
+        });
+        controller.subscribe(snapshot -> received.add(snapshot.revision()));
+
+        assertThrows(IllegalStateException.class, () -> controller.setCorner(
+                TwoPointSelection.Corner.START,
+                new SelectionPoint(0, 0, 0)));
+
+        assertEquals(1L, controller.snapshot().revision());
+        assertEquals(List.of(1L), received);
     }
 }
