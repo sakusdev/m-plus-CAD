@@ -33,9 +33,35 @@ class SettingsShellControllerTest {
 
         SettingsShellController.Snapshot snapshot = controller.selectSection(SettingsSection.MATERIALS);
 
+        assertEquals(1L, snapshot.revision());
         assertEquals(SettingsSection.MATERIALS, snapshot.activeSection());
         assertEquals(initial, snapshot.draft().value());
         assertTrue(snapshot.validation().valid());
+    }
+
+    @Test
+    void revisionAdvancesOnlyForObservableStateChanges() {
+        ProjectSettings initial = ProjectSettingsFixtures.populated();
+        SettingsShellController controller = new SettingsShellController(initial);
+        ExporterCapabilities capabilities = new ExporterCapabilities(
+                ApiVersions.GENERATED_SCENE,
+                ApiVersions.GENERATED_SCENE,
+                Set.of(ExporterFeature.MULTIPLE_MESHES),
+                ExporterLimits.unlimited(),
+                Set.of("obj"));
+
+        assertEquals(0L, controller.snapshot().revision());
+        assertEquals(0L, controller.selectSection(SettingsSection.SELECTION).revision());
+        assertEquals(1L, controller.selectSection(SettingsSection.OUTPUT).revision());
+        assertEquals(1L, controller.edit(draft -> draft).revision());
+        assertEquals(2L, controller.edit(draft -> draft.withSelection(
+                new ProjectSettings.SelectionSettings(1234L, false))).revision());
+        assertEquals(3L, controller.selectExporter(
+                new CanonicalIdentifier("mcad", "obj"), capabilities).revision());
+        assertEquals(3L, controller.selectExporter(
+                new CanonicalIdentifier("mcad", "obj"), capabilities).revision());
+        assertEquals(4L, controller.clearExporterCapabilities().revision());
+        assertEquals(4L, controller.clearExporterCapabilities().revision());
     }
 
     @Test
