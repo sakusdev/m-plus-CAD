@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.StringJoiner;
 
 public record Diagnostic(
         DiagnosticSeverity severity,
@@ -20,7 +21,8 @@ public record Diagnostic(
             .comparing(Diagnostic::severity)
             .thenComparing(Diagnostic::code)
             .thenComparing(Diagnostic::message)
-            .thenComparing(diagnostic -> diagnostic.source().map(SourceReference::stableSortKey).orElse(""));
+            .thenComparing(diagnostic -> diagnostic.source().map(SourceReference::stableSortKey).orElse(""))
+            .thenComparing(Diagnostic::detailsStableSortKey);
 
     public Diagnostic(
             DiagnosticSeverity severity,
@@ -38,5 +40,11 @@ public record Diagnostic(
         Checks.nonBlank(message, "message");
         source = Checks.notNull(source, "source");
         details = Checks.immutableSortedMap(details, CanonicalIdentifier::compareTo, "details");
+    }
+
+    private String detailsStableSortKey() {
+        var joiner = new StringJoiner(",", "{", "}");
+        details.forEach((key, value) -> joiner.add(key + "=" + value.stableSortKey()));
+        return joiner.toString();
     }
 }

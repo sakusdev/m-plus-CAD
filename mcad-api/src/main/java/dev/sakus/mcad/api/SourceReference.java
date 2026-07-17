@@ -15,12 +15,20 @@ public record SourceReference(
     public SourceReference {
         Checks.stableId(snapshotId, "snapshotId");
         relativeBlockPosition = Checks.notNull(relativeBlockPosition, "relativeBlockPosition");
+        relativeBlockPosition.ifPresent(position -> {
+            if (position.x() < 0 || position.y() < 0 || position.z() < 0) {
+                throw new IllegalArgumentException("relativeBlockPosition must be non-negative");
+            }
+        });
         blockId = Checks.notNull(blockId, "blockId");
         markerRuleId = Checks.notNull(markerRuleId, "markerRuleId");
     }
 
     String stableSortKey() {
-        return snapshotId + "|" + relativeBlockPosition.map(Object::toString).orElse("")
+        String positionKey = relativeBlockPosition
+                .map(position -> position.x() + "," + position.y() + "," + position.z())
+                .orElse("");
+        return snapshotId + "|" + positionKey
                 + "|" + blockId.map(Object::toString).orElse("")
                 + "|" + markerRuleId.map(Object::toString).orElse("");
     }
