@@ -21,6 +21,19 @@ jobs:
           java-version: '25'
           cache: gradle
       - name: Build and test
+        shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon clean check
+          if ! ./gradlew --no-daemon --console=plain clean check >gradle-build.log 2>&1; then
+            tail -n 100 gradle-build.log
+            exit 1
+          fi
+          tail -n 40 gradle-build.log
+      - name: Upload Gradle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle-build.log
+          if-no-files-found: error
+          retention-days: 3
