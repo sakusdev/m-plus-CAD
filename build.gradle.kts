@@ -1,4 +1,5 @@
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
@@ -50,27 +51,28 @@ project(":mcad-api") {
     val apiRuntimeClasspath = configurations.named("runtimeClasspath")
     val apiSourceRoot = layout.projectDirectory.dir("src/main/java")
     val apiProjectDirectory = layout.projectDirectory
+    val apiProjectPath = path
 
     val verifyApiIsolation by tasks.registering {
         group = "verification"
-        description = "Reject Minecraft, loader, exporter implementation, GUI, or Blender dependencies from mcad-api."
+        description = "Reject all non-JDK runtime dependencies and platform-specific source references from mcad-api."
 
         dependsOn("classes")
 
         doLast {
-            val forbidden = listOf("minecraft", "fabric", "neoforge", "forge", "blender")
             val runtime = apiRuntimeClasspath.get()
             val forbiddenComponents = runtime.incoming.resolutionResult.allComponents.mapNotNull { component ->
-                val id = component.id
-                if (id is ModuleComponentIdentifier) {
-                    val coordinate = "${id.group}:${id.module}:${id.version}".lowercase()
-                    coordinate.takeIf { candidate -> forbidden.any(candidate::contains) }
-                } else {
-                    null
+                when (val id = component.id) {
+                    is ModuleComponentIdentifier -> "module:${id.group}:${id.module}:${id.version}"
+                    is ProjectComponentIdentifier -> id.projectPath
+                        .takeIf { projectPath -> projectPath != apiProjectPath }
+                        ?.let { projectPath -> "project:$projectPath" }
+                    else -> null
                 }
             }
             check(forbiddenComponents.isEmpty()) {
-                "mcad-api runtime dependency graph contains forbidden components: $forbiddenComponents"
+                "mcad-api runtime dependency graph must contain no external modules or sibling projects: " +
+                        forbiddenComponents
             }
 
             val forbiddenImports = listOf(
@@ -79,6 +81,13 @@ project(":mcad-api") {
                 "net.neoforged",
                 "net.minecraftforge",
                 "org.blender",
+                "dev.sakus.mcad.core",
+                "dev.sakus.mcad.materials",
+                "dev.sakus.mcad.markers",
+                "dev.sakus.mcad.export",
+                "dev.sakus.mcad.minecraft",
+                "dev.sakus.mcad.gui",
+                "dev.sakus.mcad.blender",
             )
             val sourceRoot = apiSourceRoot.asFile
             val projectDirectory = apiProjectDirectory.asFile
@@ -93,7 +102,8 @@ project(":mcad-api") {
                     }
                 }
             check(violations.isEmpty()) {
-                "mcad-api sources contain forbidden platform references:\n${violations.joinToString("\n")}"
+                "mcad-api sources contain forbidden platform or sibling-module references:\n" +
+                        violations.joinToString("\n")
             }
         }
     }
