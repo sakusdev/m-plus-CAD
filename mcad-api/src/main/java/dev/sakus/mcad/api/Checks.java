@@ -98,6 +98,15 @@ final class Checks {
         return List.copyOf(copy);
     }
 
+    static <T> List<T> immutableDistinctSortedList(
+            Collection<? extends T> values,
+            Comparator<? super T> comparator,
+            String name) {
+        var copy = immutableSortedList(values, comparator, name);
+        requireNoDuplicates(copy, name);
+        return copy;
+    }
+
     static List<String> immutableDistinctSortedStrings(Collection<String> values, String name) {
         notNull(values, name);
         var sorted = new TreeSet<String>();
