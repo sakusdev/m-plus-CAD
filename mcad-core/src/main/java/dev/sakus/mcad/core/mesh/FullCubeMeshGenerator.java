@@ -77,13 +77,15 @@ public final class FullCubeMeshGenerator {
         collectSettingDiagnostics(settings, diagnostics);
 
         Map<BlockPosition, BlockEntry> occupied = new HashMap<>(mapCapacity(snapshot.blocks().size()));
-        for (BlockEntry block : snapshot.blocks()) {
-            occupied.put(block.relativePosition(), block);
-        }
-
         NavigableMap<CanonicalIdentifier, MeshAccumulator> accumulators = new TreeMap<>();
+        int indexed = 0;
         for (BlockEntry block : snapshot.blocks()) {
+            if ((indexed % CANCELLATION_CHECK_INTERVAL) == 0) {
+                cancellationToken.throwIfCancellationRequested();
+            }
+            occupied.put(block.relativePosition(), block);
             accumulators.computeIfAbsent(block.blockId(), ignored -> new MeshAccumulator());
+            indexed++;
         }
 
         long totalBlocks = snapshot.blocks().size();
@@ -119,7 +121,11 @@ public final class FullCubeMeshGenerator {
         cancellationToken.throwIfCancellationRequested();
 
         List<MeshGroup> meshes = new ArrayList<>();
+        int completedGroups = 0;
         for (Map.Entry<CanonicalIdentifier, MeshAccumulator> entry : accumulators.entrySet()) {
+            if ((completedGroups % CANCELLATION_CHECK_INTERVAL) == 0) {
+                cancellationToken.throwIfCancellationRequested();
+            }
             if (entry.getValue().isEmpty()) {
                 diagnostics.add(new Diagnostic(
                         DiagnosticSeverity.INFO,
@@ -127,10 +133,14 @@ public final class FullCubeMeshGenerator {
                         "Omitted block group with no visible faces: " + entry.getKey(),
                         Optional.empty(),
                         Map.of()));
+                completedGroups++;
                 continue;
             }
             meshes.add(entry.getValue().toMeshGroup(entry.getKey()));
+            completedGroups++;
         }
+
+        cancellationToken.throwIfCancellationRequested();
 
         long vertexCount = Math.multiplyExact(visibleFaces, 4L);
         long triangleCount = Math.multiplyExact(visibleFaces, 2L);
