@@ -1,0 +1,55 @@
+{
+  "agent/architecture-foundation": [
+    "README.md",
+    "LICENSE",
+    "ARCHITECTURE.md",
+    "CONTRIBUTING_AGENTS.md",
+    "ROADMAP.md",
+    "THIRD_PARTY_NOTICES.md",
+    "docs/**",
+    ".github/**",
+    "scripts/**"
+  ],
+  "agent/api-contracts": [
+    "mcad-api/**",
+    "fixtures/api/**"
+  ],
+  "agent/world-snapshot": [
+    "mcad-minecraft/src/**/snapshot/**",
+    "mcad-minecraft/src/test/**/snapshot/**",
+    "fixtures/snapshots/**"
+  ],
+  "agent/selection-gui": [
+    "mcad-minecraft/src/**/selection/**",
+    "mcad-minecraft/src/**/gui/**",
+    "mcad-minecraft/src/test/**/selection/**",
+    "mcad-minecraft/src/test/**/gui/**"
+  ],
+  "agent/mesh-engine": [
+    "mcad-core/src/**/mesh/**",
+    "mcad-core/src/test/**/mesh/**",
+    "fixtures/mesh/**"
+  ],
+  "agent/material-system": [
+    "mcad-materials/**",
+    "fixtures/materials/**"
+  ],
+  "agent/marker-system": [
+    "mcad-markers/**",
+    "fixtures/markers/**"
+  ],
+  "agent/obj-exporter": [
+    "mcad-export-obj/**",
+    "fixtures/obj/**"
+  ],
+  "agent/gltf-exporter": [
+    "mcad-export-gltf/**",
+    "fixtures/gltf/**"
+  ],
+  "agent/blender-addon": [
+    "blender-addon/**"
+  ],
+  "agent/integration": [
+    "**"
+  ]
+}
