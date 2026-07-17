@@ -32,6 +32,7 @@ public final class OperationProgressModel {
     }
 
     public record Snapshot(
+            long revision,
             State state,
             String phase,
             long completed,
@@ -39,6 +40,9 @@ public final class OperationProgressModel {
             String message,
             boolean cancellable) {
         public Snapshot {
+            if (revision < 0L) {
+                throw new IllegalArgumentException("revision must be non-negative");
+            }
             Objects.requireNonNull(state, "state");
             phase = Objects.requireNonNull(phase, "phase");
             total = Objects.requireNonNull(total, "total");
@@ -70,9 +74,11 @@ public final class OperationProgressModel {
     private static final Runnable NO_CANCELLATION = () -> { };
 
     private final Object lock = new Object();
+    private final Object publishLock = new Object();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
-    private Snapshot snapshot = idleSnapshot();
+    private Snapshot snapshot = idleSnapshot(0L);
     private Runnable cancellationAction = NO_CANCELLATION;
+    private long publishedRevision = -1L;
 
     public Snapshot snapshot() {
         synchronized (lock) {
@@ -95,8 +101,9 @@ public final class OperationProgressModel {
             if (snapshot.active()) {
                 throw new IllegalStateException("an operation is already active");
             }
+            long nextRevision = Math.incrementExact(snapshot.revision());
+            updated = new Snapshot(nextRevision, State.RUNNING, phase, 0L, total, message, cancellable);
             this.cancellationAction = cancellable ? checkedAction : NO_CANCELLATION;
-            updated = new Snapshot(State.RUNNING, phase, 0L, total, message, cancellable);
             snapshot = updated;
         }
         publish(updated);
@@ -112,7 +119,18 @@ public final class OperationProgressModel {
             if (snapshot.state() != State.RUNNING) {
                 throw new IllegalStateException("progress can only be reported while running");
             }
-            updated = new Snapshot(State.RUNNING, phase, completed, total, message, snapshot.cancellable());
+            if (phase.equals(snapshot.phase()) && completed < snapshot.completed()) {
+                throw new IllegalArgumentException("progress must not move backwards within the same phase");
+            }
+            long nextRevision = Math.incrementExact(snapshot.revision());
+            updated = new Snapshot(
+                    nextRevision,
+                    State.RUNNING,
+                    phase,
+                    completed,
+                    total,
+                    message,
+                    snapshot.cancellable());
             snapshot = updated;
         }
         publish(updated);
@@ -126,7 +144,9 @@ public final class OperationProgressModel {
             if (snapshot.state() != State.RUNNING || !snapshot.cancellable()) {
                 return false;
             }
+            long nextRevision = Math.incrementExact(snapshot.revision());
             updated = new Snapshot(
+                    nextRevision,
                     State.CANCELLING,
                     snapshot.phase(),
                     snapshot.completed(),
@@ -137,13 +157,13 @@ public final class OperationProgressModel {
             action = cancellationAction;
             cancellationAction = NO_CANCELLATION;
         }
-        publish(updated);
         action.run();
+        publish(updated);
         return true;
     }
 
     public Snapshot succeed(String message) {
-        return finish(State.SUCCEEDED, message);
+        return finish(State.SUCCEEDED, requireNonBlank(message, "message"));
     }
 
     public Snapshot fail(String message) {
@@ -151,15 +171,20 @@ public final class OperationProgressModel {
     }
 
     public Snapshot cancelled(String message) {
-        return finish(State.CANCELLED, message);
+        return finish(State.CANCELLED, requireNonBlank(message, "message"));
     }
 
     public Snapshot reset() {
-        Snapshot updated = idleSnapshot();
+        Snapshot updated;
         synchronized (lock) {
             if (snapshot.active()) {
                 throw new IllegalStateException("cannot reset an active operation");
             }
+            if (snapshot.state() == State.IDLE) {
+                return snapshot;
+            }
+            long nextRevision = Math.incrementExact(snapshot.revision());
+            updated = idleSnapshot(nextRevision);
             snapshot = updated;
             cancellationAction = NO_CANCELLATION;
         }
@@ -174,13 +199,14 @@ public final class OperationProgressModel {
     }
 
     private Snapshot finish(State state, String message) {
-        Objects.requireNonNull(message, "message");
         Snapshot updated;
         synchronized (lock) {
             if (!snapshot.active()) {
                 throw new IllegalStateException("no active operation to finish");
             }
+            long nextRevision = Math.incrementExact(snapshot.revision());
             updated = new Snapshot(
+                    nextRevision,
                     state,
                     snapshot.phase(),
                     snapshot.completed(),
@@ -195,13 +221,19 @@ public final class OperationProgressModel {
     }
 
     private void publish(Snapshot updated) {
-        for (Listener listener : listeners) {
-            listener.progressChanged(updated);
+        synchronized (publishLock) {
+            if (updated.revision() <= publishedRevision) {
+                return;
+            }
+            publishedRevision = updated.revision();
+            for (Listener listener : listeners) {
+                listener.progressChanged(updated);
+            }
         }
     }
 
-    private static Snapshot idleSnapshot() {
-        return new Snapshot(State.IDLE, "", 0L, OptionalLong.empty(), "", false);
+    private static Snapshot idleSnapshot(long revision) {
+        return new Snapshot(revision, State.IDLE, "", 0L, OptionalLong.empty(), "", false);
     }
 
     private static void requirePhase(String phase) {
