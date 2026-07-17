@@ -3,6 +3,7 @@
  */
 package dev.sakus.mcad.minecraft.gui.settings;
 
+import dev.sakus.mcad.api.ApiVersions;
 import dev.sakus.mcad.api.CanonicalIdentifier;
 import dev.sakus.mcad.api.CollisionKind;
 import dev.sakus.mcad.api.MetadataValue;
@@ -17,9 +18,12 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,12 +50,15 @@ public final class ProjectSettingsCodec {
     private static final int METADATA_MAP = 6;
 
     public byte[] encode(ProjectSettings settings) {
-        return encodeStorageVersion(Objects.requireNonNull(settings, "settings"), CURRENT_STORAGE_VERSION);
+        ProjectSettings checked = Objects.requireNonNull(settings, "settings");
+        requireCurrentSchema(checked.schemaVersion(), "settings");
+        return encodeStorageVersion(checked, CURRENT_STORAGE_VERSION);
     }
 
     public DecodedProjectSettings decode(byte[] document, ProjectSettings migrationDefaults) {
         Objects.requireNonNull(document, "document");
-        Objects.requireNonNull(migrationDefaults, "migrationDefaults");
+        ProjectSettings defaults = Objects.requireNonNull(migrationDefaults, "migrationDefaults");
+        requireCurrentSchema(defaults.schemaVersion(), "migrationDefaults");
         if (document.length > MAX_DOCUMENT_BYTES) {
             throw new IllegalArgumentException("settings document exceeds " + MAX_DOCUMENT_BYTES + " bytes");
         }
@@ -65,7 +72,7 @@ public final class ProjectSettingsCodec {
             if (storageVersion != LEGACY_STORAGE_VERSION && storageVersion != CURRENT_STORAGE_VERSION) {
                 throw new IllegalArgumentException("unsupported settings storage version: " + storageVersion);
             }
-            ProjectSettings settings = readSettings(input, storageVersion, migrationDefaults);
+            ProjectSettings settings = readSettings(input, storageVersion, defaults);
             if (bytes.available() != 0) {
                 throw new IllegalArgumentException("settings document contains trailing data");
             }
@@ -81,7 +88,9 @@ public final class ProjectSettingsCodec {
     }
 
     static byte[] encodeLegacyVersionZero(ProjectSettings settings) {
-        return encodeStorageVersion(Objects.requireNonNull(settings, "settings"), LEGACY_STORAGE_VERSION);
+        ProjectSettings checked = Objects.requireNonNull(settings, "settings");
+        requireLegacyCompatibleSchema(checked.schemaVersion());
+        return encodeStorageVersion(checked, LEGACY_STORAGE_VERSION);
     }
 
     private static byte[] encodeStorageVersion(ProjectSettings settings, int storageVersion) {
@@ -167,7 +176,15 @@ public final class ProjectSettingsCodec {
             DataInputStream input,
             int storageVersion,
             ProjectSettings migrationDefaults) throws IOException {
-        SchemaVersion schemaVersion = readSchemaVersion(input);
+        SchemaVersion sourceSchemaVersion = readSchemaVersion(input);
+        SchemaVersion schemaVersion;
+        if (storageVersion == CURRENT_STORAGE_VERSION) {
+            requireCurrentSchema(sourceSchemaVersion, "settings document");
+            schemaVersion = sourceSchemaVersion;
+        } else {
+            requireLegacyCompatibleSchema(sourceSchemaVersion);
+            schemaVersion = ApiVersions.PROJECT_SETTINGS;
+        }
 
         var selection = new ProjectSettings.SelectionSettings(input.readLong(), input.readBoolean());
         var geometry = new ProjectSettings.GeometrySettings(input.readBoolean(), input.readBoolean());
@@ -345,7 +362,7 @@ public final class ProjectSettingsCodec {
     }
 
     private static void writeString(DataOutputStream output, String value) throws IOException {
-        byte[] encoded = Objects.requireNonNull(value, "value").getBytes(StandardCharsets.UTF_8);
+        byte[] encoded = encodeUtf8(Objects.requireNonNull(value, "value"));
         if (encoded.length > MAX_STRING_BYTES) {
             throw new IllegalArgumentException("string exceeds " + MAX_STRING_BYTES + " UTF-8 bytes");
         }
@@ -362,7 +379,31 @@ public final class ProjectSettingsCodec {
         if (encoded.length != size) {
             throw new EOFException(name + " is truncated");
         }
-        return new String(encoded, StandardCharsets.UTF_8);
+        try {
+            return StandardCharsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(encoded))
+                    .toString();
+        } catch (CharacterCodingException exception) {
+            throw new IllegalArgumentException(name + " is not valid UTF-8", exception);
+        }
+    }
+
+    private static byte[] encodeUtf8(String value) {
+        try {
+            ByteBuffer encoded = StandardCharsets.UTF_8
+                    .newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(value));
+            byte[] bytes = new byte[encoded.remaining()];
+            encoded.get(bytes);
+            return bytes;
+        } catch (CharacterCodingException exception) {
+            throw new IllegalArgumentException("string contains invalid Unicode", exception);
+        }
     }
 
     private static void writeCount(DataOutputStream output, int size) throws IOException {
@@ -391,6 +432,25 @@ public final class ProjectSettingsCodec {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("unknown " + name + ": " + value, exception);
+        }
+    }
+
+    private static void requireCurrentSchema(SchemaVersion version, String name) {
+        Objects.requireNonNull(version, name + " schemaVersion");
+        if (!version.equals(ApiVersions.PROJECT_SETTINGS)) {
+            throw new IllegalArgumentException(
+                    name + " schema version " + version
+                            + " is unsupported; expected " + ApiVersions.PROJECT_SETTINGS);
+        }
+    }
+
+    private static void requireLegacyCompatibleSchema(SchemaVersion version) {
+        Objects.requireNonNull(version, "schemaVersion");
+        SchemaVersion current = ApiVersions.PROJECT_SETTINGS;
+        if (version.major() != current.major() || version.compareTo(current) > 0) {
+            throw new IllegalArgumentException(
+                    "legacy settings schema version " + version
+                            + " cannot migrate to " + current);
         }
     }
 
