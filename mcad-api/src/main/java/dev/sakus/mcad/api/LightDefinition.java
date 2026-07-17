@@ -4,21 +4,26 @@
 package dev.sakus.mcad.api;
 
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.OptionalDouble;
 
 public record LightDefinition(
         String stableId,
         String name,
+        Transform transform,
         LightType type,
         Color3d colour,
         double intensity,
         OptionalDouble range,
         OptionalDouble innerConeRadians,
-        OptionalDouble outerConeRadians) {
+        OptionalDouble outerConeRadians,
+        List<SourceReference> sourceReferences) {
 
     public LightDefinition {
         Checks.stableId(stableId, "stableId");
         Checks.nonBlank(name, "name");
+        Checks.notNull(transform, "transform");
         Checks.notNull(type, "type");
         Checks.notNull(colour, "colour");
         Checks.finite(intensity, "intensity");
@@ -43,5 +48,9 @@ public record LightDefinition(
                 && innerConeRadians.getAsDouble() > outerConeRadians.getAsDouble()) {
             throw new IllegalArgumentException("inner cone must not exceed outer cone");
         }
+        sourceReferences = Checks.immutableDistinctSortedList(
+                sourceReferences,
+                Comparator.comparing(SourceReference::stableSortKey),
+                "sourceReferences");
     }
 }
