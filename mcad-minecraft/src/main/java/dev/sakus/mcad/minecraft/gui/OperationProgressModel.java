@@ -3,6 +3,7 @@
  */
 package dev.sakus.mcad.minecraft.gui;
 
+import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -76,9 +77,11 @@ public final class OperationProgressModel {
     private final Object lock = new Object();
     private final Object publishLock = new Object();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
+    private final ArrayDeque<Snapshot> pendingPublications = new ArrayDeque<>();
     private Snapshot snapshot = idleSnapshot(0L);
     private Runnable cancellationAction = NO_CANCELLATION;
-    private long publishedRevision = -1L;
+    private long highestQueuedRevision = -1L;
+    private boolean publishing;
 
     public Snapshot snapshot() {
         synchronized (lock) {
@@ -225,13 +228,48 @@ public final class OperationProgressModel {
 
     private void publish(Snapshot updated) {
         synchronized (publishLock) {
-            if (updated.revision() <= publishedRevision) {
+            if (updated.revision() <= highestQueuedRevision) {
                 return;
             }
-            publishedRevision = updated.revision();
-            for (Listener listener : listeners) {
-                listener.progressChanged(updated);
+            pendingPublications.addLast(updated);
+            highestQueuedRevision = updated.revision();
+            if (publishing) {
+                return;
             }
+            publishing = true;
+        }
+
+        RuntimeException failure = null;
+        try {
+            while (true) {
+                Snapshot next;
+                synchronized (publishLock) {
+                    next = pendingPublications.pollFirst();
+                    if (next == null) {
+                        publishing = false;
+                        break;
+                    }
+                }
+                for (Listener listener : listeners) {
+                    try {
+                        listener.progressChanged(next);
+                    } catch (RuntimeException exception) {
+                        if (failure == null) {
+                            failure = exception;
+                        } else if (failure != exception) {
+                            failure.addSuppressed(exception);
+                        }
+                    }
+                }
+            }
+        } catch (Error error) {
+            synchronized (publishLock) {
+                publishing = false;
+            }
+            throw error;
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 
