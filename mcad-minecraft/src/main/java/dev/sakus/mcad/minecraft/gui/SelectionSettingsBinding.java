@@ -44,9 +44,9 @@ public final class SelectionSettingsBinding implements AutoCloseable {
             if (closed || snapshot.revision() <= appliedRevision) {
                 return;
             }
+            appliedRevision = snapshot.revision();
             selectionController.setMaximumBlockCount(
                     snapshot.draft().value().selection().maximumBlockCount());
-            appliedRevision = snapshot.revision();
         }
     }
 }
