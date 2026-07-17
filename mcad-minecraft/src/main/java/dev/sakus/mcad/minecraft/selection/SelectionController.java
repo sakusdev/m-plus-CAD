@@ -143,16 +143,17 @@ public final class SelectionController {
                     } catch (RuntimeException exception) {
                         if (failure == null) {
                             failure = exception;
-                        } else {
+                        } else if (failure != exception) {
                             failure.addSuppressed(exception);
                         }
                     }
                 }
             }
-        } finally {
+        } catch (Error error) {
             synchronized (publishLock) {
                 publishing = false;
             }
+            throw error;
         }
         if (failure != null) {
             throw failure;
