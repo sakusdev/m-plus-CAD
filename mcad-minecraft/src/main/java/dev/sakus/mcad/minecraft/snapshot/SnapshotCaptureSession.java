@@ -91,9 +91,9 @@ public final class SnapshotCaptureSession {
             throw new IllegalStateException("capture is not running: " + status);
         }
 
-        world.assertReadThread();
-        reportProgress(false);
         try {
+            world.assertReadThread();
+            reportProgress(false);
             for (int processed = 0; processed < maxCells && completedCells < totalCells; processed++) {
                 cancellationToken.throwIfCancellationRequested();
                 captureCurrentCell();
