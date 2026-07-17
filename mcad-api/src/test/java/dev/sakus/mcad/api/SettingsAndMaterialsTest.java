@@ -18,7 +18,7 @@ class SettingsAndMaterialsTest {
     void materialValidatesPbrFieldsAndPaths() {
         assertThrows(IllegalArgumentException.class, () -> new MaterialDefinition(
                 "material:test", "Test", new Color4d(1, 1, 1, 1), Double.NaN, 1,
-                Color3d.BLACK, 0, AlphaMode.OPAQUE, OptionalDouble.empty(), List.of(), Map.of()));
+                Color3d.BLACK, 0, AlphaMode.OPAQUE, OptionalDouble.empty(), List.of(), Map.of(), List.of()));
         assertThrows(IllegalArgumentException.class, () -> new UserAssetReference("../secret.png", true));
         assertEquals("textures/user.png", new UserAssetReference("textures/user.png", false).projectRelativePath());
     }
