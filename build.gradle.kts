@@ -81,6 +81,7 @@ val verifyApiIsolation by tasks.registering {
         val sourceRoot = apiProject.file("src/main/java")
         val violations = sourceRoot.walkTopDown()
             .filter { it.isFile && it.extension == "java" }
+            .toList()
             .flatMap { file ->
                 file.readLines().mapIndexedNotNull { index, line ->
                     forbiddenImports.firstOrNull(line::contains)?.let { token ->
@@ -88,7 +89,6 @@ val verifyApiIsolation by tasks.registering {
                     }
                 }
             }
-            .toList()
         check(violations.isEmpty()) {
             "mcad-api sources contain forbidden platform references:\n${violations.joinToString("\n")}"
         }
