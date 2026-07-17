@@ -6,6 +6,7 @@ package dev.sakus.mcad.minecraft.gui.settings;
 import dev.sakus.mcad.api.ProjectSettings;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -19,7 +20,7 @@ import java.util.Objects;
  * Safe project-root-relative persistence for versioned settings documents.
  */
 public final class ProjectSettingsStore {
-    private static final long MAX_SETTINGS_FILE_BYTES = 16L * 1024L * 1024L;
+    private static final int MAX_SETTINGS_FILE_BYTES = 16 * 1024 * 1024;
 
     private final Path root;
     private final ProjectSettingsCodec codec;
@@ -96,7 +97,10 @@ public final class ProjectSettingsStore {
         if (size > MAX_SETTINGS_FILE_BYTES) {
             throw new IOException("settings file exceeds " + MAX_SETTINGS_FILE_BYTES + " bytes");
         }
-        byte[] document = Files.readAllBytes(target);
+        byte[] document;
+        try (InputStream input = Files.newInputStream(target, StandardOpenOption.READ)) {
+            document = input.readNBytes(MAX_SETTINGS_FILE_BYTES + 1);
+        }
         if (document.length > MAX_SETTINGS_FILE_BYTES) {
             throw new IOException("settings file exceeds " + MAX_SETTINGS_FILE_BYTES + " bytes");
         }
