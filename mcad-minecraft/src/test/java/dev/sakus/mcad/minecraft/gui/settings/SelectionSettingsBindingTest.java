@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class SelectionSettingsBindingTest {
     @Test
@@ -21,7 +22,8 @@ class SelectionSettingsBindingTest {
         SettingsShellController settings = new SettingsShellController(ProjectSettingsFixtures.populated());
         SelectionController selection = eightBlockSelection();
 
-        try (SelectionSettingsBinding ignored = new SelectionSettingsBinding(settings, selection)) {
+        try (SelectionSettingsBinding binding = new SelectionSettingsBinding(settings, selection)) {
+            assertNotNull(binding);
             assertEquals(SelectionValidation.Code.VALID, selection.snapshot().validation().code());
 
             settings.edit(draft -> draft.withSelection(
@@ -43,7 +45,8 @@ class SelectionSettingsBindingTest {
             }
         });
 
-        try (SelectionSettingsBinding ignored = new SelectionSettingsBinding(settings, selection)) {
+        try (SelectionSettingsBinding binding = new SelectionSettingsBinding(settings, selection)) {
+            assertNotNull(binding);
             assertEquals(SelectionValidation.Code.TOO_LARGE, selection.snapshot().validation().code());
 
             settings.edit(draft -> draft.withSelection(
