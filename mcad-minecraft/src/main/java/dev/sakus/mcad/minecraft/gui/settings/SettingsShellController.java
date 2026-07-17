@@ -33,11 +33,15 @@ public final class SettingsShellController {
     }
 
     public record Snapshot(
+            long revision,
             SettingsSection activeSection,
             ProjectSettingsDraft draft,
             Optional<ExporterCapabilityModel> exporterCapabilities,
             SettingsValidationModel validation) {
         public Snapshot {
+            if (revision < 0L) {
+                throw new IllegalArgumentException("revision must be non-negative");
+            }
             Objects.requireNonNull(activeSection, "activeSection");
             Objects.requireNonNull(draft, "draft");
             exporterCapabilities = Objects.requireNonNull(exporterCapabilities, "exporterCapabilities");
@@ -47,6 +51,7 @@ public final class SettingsShellController {
 
     private final Object lock = new Object();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
+    private long revision;
     private SettingsSection activeSection = SettingsSection.SELECTION;
     private ProjectSettingsDraft draft;
     private Optional<ExporterCapabilityModel> exporterCapabilities = Optional.empty();
@@ -68,7 +73,9 @@ public final class SettingsShellController {
             if (activeSection == section) {
                 return snapshotLocked();
             }
+            long nextRevision = Math.incrementExact(revision);
             activeSection = section;
+            revision = nextRevision;
             updated = snapshotLocked();
         }
         publish(updated);
@@ -83,7 +90,9 @@ public final class SettingsShellController {
             if (next.equals(draft)) {
                 return snapshotLocked();
             }
+            long nextRevision = Math.incrementExact(revision);
             draft = next;
+            revision = nextRevision;
             updated = snapshotLocked();
         }
         publish(updated);
@@ -95,8 +104,15 @@ public final class SettingsShellController {
         ExporterCapabilityModel capabilityModel = ExporterCapabilityModel.from(capabilities);
         Snapshot updated;
         synchronized (lock) {
-            draft = draft.withExporterId(exporterId);
-            exporterCapabilities = Optional.of(capabilityModel);
+            ProjectSettingsDraft nextDraft = draft.withExporterId(exporterId);
+            Optional<ExporterCapabilityModel> nextCapabilities = Optional.of(capabilityModel);
+            if (nextDraft.equals(draft) && nextCapabilities.equals(exporterCapabilities)) {
+                return snapshotLocked();
+            }
+            long nextRevision = Math.incrementExact(revision);
+            draft = nextDraft;
+            exporterCapabilities = nextCapabilities;
+            revision = nextRevision;
             updated = snapshotLocked();
         }
         publish(updated);
@@ -109,7 +125,9 @@ public final class SettingsShellController {
             if (exporterCapabilities.isEmpty()) {
                 return snapshotLocked();
             }
+            long nextRevision = Math.incrementExact(revision);
             exporterCapabilities = Optional.empty();
+            revision = nextRevision;
             updated = snapshotLocked();
         }
         publish(updated);
@@ -133,8 +151,15 @@ public final class SettingsShellController {
         DecodedProjectSettings decoded = store.load(relativePath, migrationDefaults);
         Snapshot updated;
         synchronized (lock) {
-            draft = ProjectSettingsDraft.from(decoded.settings());
-            exporterCapabilities = Optional.empty();
+            ProjectSettingsDraft nextDraft = ProjectSettingsDraft.from(decoded.settings());
+            Optional<ExporterCapabilityModel> nextCapabilities = Optional.empty();
+            if (nextDraft.equals(draft) && nextCapabilities.equals(exporterCapabilities)) {
+                return decoded;
+            }
+            long nextRevision = Math.incrementExact(revision);
+            draft = nextDraft;
+            exporterCapabilities = nextCapabilities;
+            revision = nextRevision;
             updated = snapshotLocked();
         }
         publish(updated);
@@ -149,6 +174,7 @@ public final class SettingsShellController {
 
     private Snapshot snapshotLocked() {
         return new Snapshot(
+                revision,
                 activeSection,
                 draft,
                 exporterCapabilities,
