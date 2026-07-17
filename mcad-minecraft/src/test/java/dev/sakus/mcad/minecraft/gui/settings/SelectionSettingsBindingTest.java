@@ -11,6 +11,8 @@ import dev.sakus.mcad.minecraft.selection.SelectionValidation;
 import dev.sakus.mcad.minecraft.selection.TwoPointSelection;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SelectionSettingsBindingTest {
@@ -26,6 +28,28 @@ class SelectionSettingsBindingTest {
                     new ProjectSettings.SelectionSettings(7L, false)));
 
             assertEquals(SelectionValidation.Code.TOO_LARGE, selection.snapshot().validation().code());
+        }
+    }
+
+    @Test
+    void reentrantSettingsUpdateWinsOverOlderInitialSnapshot() {
+        SettingsShellController settings = new SettingsShellController(ProjectSettingsFixtures.populated());
+        SelectionController selection = eightBlockSelection();
+        AtomicBoolean updateOnce = new AtomicBoolean();
+        selection.subscribe(snapshot -> {
+            if (updateOnce.compareAndSet(false, true)) {
+                settings.edit(draft -> draft.withSelection(
+                        new ProjectSettings.SelectionSettings(7L, false)));
+            }
+        });
+
+        try (SelectionSettingsBinding ignored = new SelectionSettingsBinding(settings, selection)) {
+            assertEquals(SelectionValidation.Code.TOO_LARGE, selection.snapshot().validation().code());
+
+            settings.edit(draft -> draft.withSelection(
+                    new ProjectSettings.SelectionSettings(8L, false)));
+
+            assertEquals(SelectionValidation.Code.VALID, selection.snapshot().validation().code());
         }
     }
 
