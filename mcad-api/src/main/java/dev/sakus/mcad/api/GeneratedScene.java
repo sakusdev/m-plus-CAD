@@ -17,6 +17,7 @@ import java.util.function.Function;
 public record GeneratedScene(
         SchemaVersion schemaVersion,
         String sceneId,
+        Transform originTransform,
         List<String> rootNodeIds,
         List<SceneNode> nodes,
         List<MeshGroup> meshes,
@@ -33,6 +34,7 @@ public record GeneratedScene(
     public GeneratedScene(
             SchemaVersion schemaVersion,
             String sceneId,
+            Transform originTransform,
             List<String> rootNodeIds,
             List<SceneNode> nodes,
             List<MeshGroup> meshes,
@@ -45,7 +47,7 @@ public record GeneratedScene(
             Map<CanonicalIdentifier, MetadataValue> customProperties,
             List<Diagnostic> diagnostics,
             SceneStatistics statistics) {
-        this(schemaVersion, sceneId, rootNodeIds, nodes, meshes, materials, lights, cameras, curves,
+        this(schemaVersion, sceneId, originTransform, rootNodeIds, nodes, meshes, materials, lights, cameras, curves,
                 bones, collisions,
                 Checks.immutableSortedMap(customProperties, CanonicalIdentifier::compareTo, "customProperties"),
                 diagnostics, statistics);
@@ -54,6 +56,7 @@ public record GeneratedScene(
     public GeneratedScene {
         Checks.notNull(schemaVersion, "schemaVersion");
         Checks.stableId(sceneId, "sceneId");
+        Checks.notNull(originTransform, "originTransform");
         rootNodeIds = Checks.immutableDistinctSortedStrings(rootNodeIds, "rootNodeIds");
         nodes = stableSort(nodes, SceneNode::stableId, "nodes");
         meshes = stableSort(meshes, MeshGroup::stableId, "meshes");
