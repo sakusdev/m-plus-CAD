@@ -4,6 +4,7 @@
 package dev.sakus.mcad.api;
 
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -12,15 +13,18 @@ public record MeshGroup(
         String stableId,
         String name,
         List<MeshPrimitive> primitives,
-        NavigableMap<CanonicalIdentifier, MetadataValue> customProperties) {
+        NavigableMap<CanonicalIdentifier, MetadataValue> customProperties,
+        List<SourceReference> sourceReferences) {
 
     public MeshGroup(
             String stableId,
             String name,
             List<MeshPrimitive> primitives,
-            Map<CanonicalIdentifier, MetadataValue> customProperties) {
+            Map<CanonicalIdentifier, MetadataValue> customProperties,
+            List<SourceReference> sourceReferences) {
         this(stableId, name, primitives,
-                Checks.immutableSortedMap(customProperties, CanonicalIdentifier::compareTo, "customProperties"));
+                Checks.immutableSortedMap(customProperties, CanonicalIdentifier::compareTo, "customProperties"),
+                sourceReferences);
     }
 
     public MeshGroup {
@@ -32,5 +36,9 @@ public record MeshGroup(
         }
         customProperties = Checks.immutableSortedMap(
                 customProperties, CanonicalIdentifier::compareTo, "customProperties");
+        sourceReferences = Checks.immutableDistinctSortedList(
+                sourceReferences,
+                Comparator.comparing(SourceReference::stableSortKey),
+                "sourceReferences");
     }
 }
