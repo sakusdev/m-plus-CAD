@@ -47,6 +47,40 @@ class OperationProgressModelTest {
     }
 
     @Test
+    void reentrantUpdatesAreDeliveredAfterCurrentSnapshotToEveryListener() {
+        OperationProgressModel model = new OperationProgressModel();
+        List<String> events = new ArrayList<>();
+        model.subscribe(snapshot -> {
+            events.add("first-" + snapshot.revision());
+            if (snapshot.revision() == 1L) {
+                model.report("export", 1L, OptionalLong.of(2L), "1/2");
+            }
+        });
+        model.subscribe(snapshot -> events.add("second-" + snapshot.revision()));
+
+        model.begin("export", OptionalLong.of(2L), "開始", false, () -> { });
+
+        assertEquals(List.of("first-1", "second-1", "first-2", "second-2"), events);
+    }
+
+    @Test
+    void oneListenerFailureDoesNotPreventOtherListenersOrStateUpdate() {
+        OperationProgressModel model = new OperationProgressModel();
+        List<Long> received = new ArrayList<>();
+        model.subscribe(snapshot -> {
+            throw new IllegalStateException("listener failed");
+        });
+        model.subscribe(snapshot -> received.add(snapshot.revision()));
+
+        assertThrows(IllegalStateException.class,
+                () -> model.begin("export", OptionalLong.empty(), "開始", false, () -> { }));
+
+        assertEquals(1L, model.snapshot().revision());
+        assertEquals(OperationProgressModel.State.RUNNING, model.snapshot().state());
+        assertEquals(List.of(1L), received);
+    }
+
+    @Test
     void publishesCancellingStateEvenWhenCancellationActionThrows() {
         OperationProgressModel model = new OperationProgressModel();
         List<OperationProgressModel.Snapshot> published = new ArrayList<>();
