@@ -16,10 +16,13 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SettingsShellControllerTest {
@@ -62,6 +65,41 @@ class SettingsShellControllerTest {
                 new CanonicalIdentifier("mcad", "obj"), capabilities).revision());
         assertEquals(4L, controller.clearExporterCapabilities().revision());
         assertEquals(4L, controller.clearExporterCapabilities().revision());
+    }
+
+    @Test
+    void reentrantUpdatesAreDeliveredAfterCurrentSnapshotToEveryListener() {
+        SettingsShellController controller = new SettingsShellController(ProjectSettingsFixtures.populated());
+        List<String> events = new ArrayList<>();
+        controller.subscribe(snapshot -> {
+            events.add("first-" + snapshot.revision());
+            if (snapshot.revision() == 1L) {
+                controller.edit(draft -> draft.withSelection(
+                        new ProjectSettings.SelectionSettings(1234L, false)));
+            }
+        });
+        controller.subscribe(snapshot -> events.add("second-" + snapshot.revision()));
+
+        controller.selectSection(SettingsSection.OUTPUT);
+
+        assertEquals(List.of("first-1", "second-1", "first-2", "second-2"), events);
+    }
+
+    @Test
+    void oneListenerFailureDoesNotPreventOtherListenersOrStateUpdate() {
+        SettingsShellController controller = new SettingsShellController(ProjectSettingsFixtures.populated());
+        List<Long> received = new ArrayList<>();
+        controller.subscribe(snapshot -> {
+            throw new IllegalStateException("listener failed");
+        });
+        controller.subscribe(snapshot -> received.add(snapshot.revision()));
+
+        assertThrows(IllegalStateException.class,
+                () -> controller.selectSection(SettingsSection.OUTPUT));
+
+        assertEquals(1L, controller.snapshot().revision());
+        assertEquals(SettingsSection.OUTPUT, controller.snapshot().activeSection());
+        assertEquals(List.of(1L), received);
     }
 
     @Test
