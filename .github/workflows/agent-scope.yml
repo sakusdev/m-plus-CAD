@@ -1,0 +1,27 @@
+name: Agent scope
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate assigned paths
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Validate branch scope
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: >-
+          python3 scripts/validate_agent_scope.py
+          --branch "$HEAD_BRANCH"
+          --base "origin/$BASE_BRANCH"
+          --head HEAD
