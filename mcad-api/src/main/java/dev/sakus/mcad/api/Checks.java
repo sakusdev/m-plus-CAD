@@ -102,9 +102,11 @@ final class Checks {
             Collection<? extends T> values,
             Comparator<? super T> comparator,
             String name) {
-        var copy = immutableSortedList(values, comparator, name);
+        notNull(values, name);
+        var copy = new ArrayList<T>(values);
+        copy.sort(comparator);
         requireNoDuplicates(copy, name);
-        return copy;
+        return List.copyOf(copy);
     }
 
     static List<String> immutableDistinctSortedStrings(Collection<String> values, String name) {
