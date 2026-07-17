@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class OperationProgressBridge implements ProgressReporter, CancellationToken {
     private final OperationProgressModel model;
-    private final AtomicBoolean cancellationRequested = new AtomicBoolean();
+    private volatile AtomicBoolean cancellationRequested = new AtomicBoolean();
 
     public OperationProgressBridge(OperationProgressModel model) {
         this.model = Objects.requireNonNull(model, "model");
@@ -27,8 +27,15 @@ public final class OperationProgressBridge implements ProgressReporter, Cancella
             OptionalLong total,
             String message,
             boolean cancellable) {
-        cancellationRequested.set(false);
-        return model.begin(phase, total, message, cancellable, () -> cancellationRequested.set(true));
+        AtomicBoolean nextCancellation = new AtomicBoolean();
+        OperationProgressModel.Snapshot started = model.begin(
+                phase,
+                total,
+                message,
+                cancellable,
+                () -> nextCancellation.set(true));
+        cancellationRequested = nextCancellation;
+        return started;
     }
 
     @Override
