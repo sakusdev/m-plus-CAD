@@ -11,10 +11,14 @@ import org.junit.jupiter.api.Test;
 
 class DependencyIsolationTest {
     @Test
-    void runtimeClasspathContainsNoMinecraftOrLoaderDependency() {
+    void runtimeClasspathContainsNoPlatformOrSiblingModuleDependency() {
         String classpath = System.getProperty("java.class.path", "").toLowerCase(Locale.ROOT);
         assertFalse(classpath.contains("minecraft"));
         assertFalse(classpath.contains("fabric-loader"));
         assertFalse(classpath.contains("neoforge"));
+        assertFalse(classpath.contains("mcad-core"));
+        assertFalse(classpath.contains("mcad-materials"));
+        assertFalse(classpath.contains("mcad-markers"));
+        assertFalse(classpath.contains("mcad-export"));
     }
 }
