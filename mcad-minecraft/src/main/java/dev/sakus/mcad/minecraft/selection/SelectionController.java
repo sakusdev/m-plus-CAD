@@ -3,6 +3,7 @@
  */
 package dev.sakus.mcad.minecraft.selection;
 
+import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -35,10 +36,14 @@ public final class SelectionController {
     }
 
     private final Object lock = new Object();
+    private final Object publishLock = new Object();
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
+    private final ArrayDeque<Snapshot> pendingPublications = new ArrayDeque<>();
     private TwoPointSelection selection = TwoPointSelection.empty();
     private long maximumBlockCount;
     private long revision;
+    private long highestQueuedRevision = -1L;
+    private boolean publishing;
 
     public SelectionController(long maximumBlockCount) {
         requirePositive(maximumBlockCount);
@@ -73,8 +78,9 @@ public final class SelectionController {
             if (maximumBlockCount == newMaximumBlockCount) {
                 return snapshotLocked();
             }
+            long nextRevision = Math.incrementExact(revision);
             maximumBlockCount = newMaximumBlockCount;
-            revision = Math.incrementExact(revision);
+            revision = nextRevision;
             updated = snapshotLocked();
         }
         publish(updated);
@@ -94,8 +100,9 @@ public final class SelectionController {
             if (next.equals(selection)) {
                 return snapshotLocked();
             }
+            long nextRevision = Math.incrementExact(revision);
             selection = next;
-            revision = Math.incrementExact(revision);
+            revision = nextRevision;
             updated = snapshotLocked();
         }
         publish(updated);
@@ -107,8 +114,48 @@ public final class SelectionController {
     }
 
     private void publish(Snapshot snapshot) {
-        for (Listener listener : listeners) {
-            listener.selectionChanged(snapshot);
+        synchronized (publishLock) {
+            if (snapshot.revision() <= highestQueuedRevision) {
+                return;
+            }
+            pendingPublications.addLast(snapshot);
+            highestQueuedRevision = snapshot.revision();
+            if (publishing) {
+                return;
+            }
+            publishing = true;
+        }
+
+        RuntimeException failure = null;
+        try {
+            while (true) {
+                Snapshot next;
+                synchronized (publishLock) {
+                    next = pendingPublications.pollFirst();
+                    if (next == null) {
+                        publishing = false;
+                        break;
+                    }
+                }
+                for (Listener listener : listeners) {
+                    try {
+                        listener.selectionChanged(next);
+                    } catch (RuntimeException exception) {
+                        if (failure == null) {
+                            failure = exception;
+                        } else {
+                            failure.addSuppressed(exception);
+                        }
+                    }
+                }
+            }
+        } finally {
+            synchronized (publishLock) {
+                publishing = false;
+            }
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 
