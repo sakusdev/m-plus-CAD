@@ -18,6 +18,18 @@ dependencies {
     implementation("net.fabricmc.fabric-api:fabric-api:${fabricApiVersion.get()}")
 
     api(project(":mcad-api"))
+    implementation(project(":mcad-core"))
+    implementation(project(":mcad-materials"))
+    implementation(project(":mcad-markers"))
+    implementation(project(":mcad-export-obj"))
+    implementation(project(":mcad-export-gltf"))
+
+    include(project(":mcad-api"))
+    include(project(":mcad-core"))
+    include(project(":mcad-materials"))
+    include(project(":mcad-markers"))
+    include(project(":mcad-export-obj"))
+    include(project(":mcad-export-gltf"))
 
     testImplementation(platform("org.junit:junit-bom:6.1.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
