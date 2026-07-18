@@ -7,7 +7,6 @@ import dev.sakus.mcad.api.BoneDefinition;
 import dev.sakus.mcad.api.CameraDefinition;
 import dev.sakus.mcad.api.CanonicalIdentifier;
 import dev.sakus.mcad.api.CollisionDefinition;
-import dev.sakus.mcad.api.CollisionKind;
 import dev.sakus.mcad.api.Diagnostic;
 import dev.sakus.mcad.api.DiagnosticSeverity;
 import dev.sakus.mcad.api.GeneratedScene;
@@ -21,6 +20,7 @@ import dev.sakus.mcad.api.ProjectSettings;
 import dev.sakus.mcad.api.Quaterniond;
 import dev.sakus.mcad.api.SceneNode;
 import dev.sakus.mcad.api.SceneStatistics;
+import dev.sakus.mcad.api.StructureSnapshot;
 import dev.sakus.mcad.api.Transform;
 import dev.sakus.mcad.api.Vec3d;
 import dev.sakus.mcad.markers.MarkerDirective;
@@ -47,16 +47,20 @@ public final class SceneAssembler {
             CanonicalIdentifier.parse("mcad:pipeline/collision_target_fallback");
     private static final CanonicalIdentifier EMPTY_COLLISION =
             CanonicalIdentifier.parse("mcad:pipeline/collision_omitted_empty_scene");
+    private static final CanonicalIdentifier ORIGIN_FALLBACK =
+            CanonicalIdentifier.parse("mcad:pipeline/origin_fallback");
 
     private SceneAssembler() {
     }
 
     public static GeneratedScene assemble(
             GeneratedScene generated,
+            StructureSnapshot snapshot,
             ProjectSettings settings,
             MarkerInterpretationResult markerResult,
             MaterialResolver materialResolver) {
         Objects.requireNonNull(generated, "generated");
+        Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(settings, "settings");
         Objects.requireNonNull(markerResult, "markerResult");
         Objects.requireNonNull(materialResolver, "materialResolver");
@@ -94,12 +98,14 @@ public final class SceneAssembler {
                     mesh.sourceReferences()));
         }
 
-        Transform originTransform = generated.originTransform();
+        Transform originTransform = configuredOrigin(snapshot, settings, markerResult, diagnostics);
         var lights = new ArrayList<>(generated.lights());
         var cameras = new ArrayList<>(generated.cameras());
         var curves = new ArrayList<>(generated.curves());
         var bones = new ArrayList<>(generated.bones());
-        var collisions = new ArrayList<>(generated.collisions());
+        var collisions = settings.collision().enabled()
+                ? new ArrayList<>(generated.collisions())
+                : new ArrayList<CollisionDefinition>();
         var customProperties = new LinkedHashMap<>(generated.customProperties());
         var groupNodes = new ArrayList<SceneNode>();
 
@@ -109,10 +115,9 @@ public final class SceneAssembler {
 
         for (MarkerDirective directive : markerResult.directives()) {
             switch (directive) {
-                case MarkerDirective.Origin origin -> originTransform = new Transform(
-                        new Vec3d(-origin.position().x(), -origin.position().y(), -origin.position().z()),
-                        Quaterniond.IDENTITY,
-                        Vec3d.ONE);
+                case MarkerDirective.Origin ignored -> {
+                    // Origin markers are consumed once by configuredOrigin according to OriginMode.
+                }
                 case MarkerDirective.PointLight light -> lights.add(new LightDefinition(
                         light.stableId(),
                         light.name(),
@@ -151,8 +156,11 @@ public final class SceneAssembler {
                                 group.sources()));
                     }
                 }
-                case MarkerDirective.Collision collision -> addCollision(
-                        collision, meshIds, collisions, diagnostics);
+                case MarkerDirective.Collision collision -> {
+                    if (settings.collision().enabled()) {
+                        addCollision(collision, meshIds, collisions, diagnostics);
+                    }
+                }
                 case MarkerDirective.CustomProperty property ->
                         customProperties.put(property.key(), property.value());
                 case MarkerDirective.Custom custom -> customProperties.put(
@@ -160,6 +168,15 @@ public final class SceneAssembler {
                                 + custom.actionId().namespace() + "/" + custom.actionId().path()),
                         new MetadataValue.MapValue(custom.parameters()));
             }
+        }
+
+        if (settings.collision().enabled() && collisions.isEmpty() && !meshIds.isEmpty()) {
+            collisions.add(new CollisionDefinition(
+                    "collision/default",
+                    "Generated collision",
+                    settings.collision().defaultKind(),
+                    List.copyOf(meshIds),
+                    List.of()));
         }
 
         var nodes = attachGroups(generated.nodes(), rootId, groupNodes);
@@ -189,6 +206,58 @@ public final class SceneAssembler {
                 customProperties,
                 diagnostics,
                 statistics);
+    }
+
+    private static Transform configuredOrigin(
+            StructureSnapshot snapshot,
+            ProjectSettings settings,
+            MarkerInterpretationResult markerResult,
+            List<Diagnostic> diagnostics) {
+        ProjectSettings.TransformSettings transform = settings.transform();
+        Vec3d translation = switch (transform.originMode()) {
+            case SELECTION_MINIMUM -> Vec3d.ZERO;
+            case SELECTION_CENTRE -> new Vec3d(
+                    -snapshot.size().width() / 2.0,
+                    -snapshot.size().height() / 2.0,
+                    -snapshot.size().depth() / 2.0);
+            case BOTTOM_CENTRE -> new Vec3d(
+                    -snapshot.size().width() / 2.0,
+                    0.0,
+                    -snapshot.size().depth() / 2.0);
+            case EXPLICIT_OFFSET -> negate(transform.explicitOriginOffset());
+            case PRESERVED_WORLD_ORIGIN -> snapshot.sourceWorldOrigin()
+                    .map(position -> new Vec3d(position.x(), position.y(), position.z()))
+                    .orElseGet(() -> fallbackOrigin(
+                            diagnostics,
+                            "World origin was requested but the snapshot did not retain one"));
+            case MARKER_DEFINED -> markerResult.directives().stream()
+                    .filter(MarkerDirective.Origin.class::isInstance)
+                    .map(MarkerDirective.Origin.class::cast)
+                    .map(MarkerDirective.Origin::position)
+                    .map(SceneAssembler::negate)
+                    .findFirst()
+                    .orElseGet(() -> fallbackOrigin(
+                            diagnostics,
+                            "Marker-defined origin was requested but no origin marker matched"));
+            case CAPTURED_PLAYER_POSITION -> fallbackOrigin(
+                    diagnostics,
+                    "Captured player position is unavailable in this snapshot; selection minimum was used");
+        };
+        return new Transform(translation, Quaterniond.IDENTITY, Vec3d.ONE);
+    }
+
+    private static Vec3d fallbackOrigin(List<Diagnostic> diagnostics, String message) {
+        diagnostics.add(new Diagnostic(
+                DiagnosticSeverity.WARNING,
+                ORIGIN_FALLBACK,
+                message,
+                Optional.empty(),
+                Map.of()));
+        return Vec3d.ZERO;
+    }
+
+    private static Vec3d negate(Vec3d value) {
+        return new Vec3d(-value.x(), -value.y(), -value.z());
     }
 
     private static MaterialResolution resolveMaterial(
@@ -248,9 +317,8 @@ public final class SceneAssembler {
                         Map.of()));
             }
         }
-        CollisionKind kind = collision.kind();
         collisions.add(new CollisionDefinition(
-                collision.stableId(), collision.name(), kind, targets, collision.sources()));
+                collision.stableId(), collision.name(), collision.kind(), targets, collision.sources()));
     }
 
     private static List<SceneNode> attachGroups(
