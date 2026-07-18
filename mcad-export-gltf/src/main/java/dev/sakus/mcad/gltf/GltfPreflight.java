@@ -5,12 +5,15 @@ package dev.sakus.mcad.gltf;
 
 import static dev.sakus.mcad.gltf.GltfDiagnostics.diagnostic;
 
+import dev.sakus.mcad.api.CameraDefinition;
+import dev.sakus.mcad.api.CameraProjection;
 import dev.sakus.mcad.api.CanonicalIdentifier;
 import dev.sakus.mcad.api.Diagnostic;
 import dev.sakus.mcad.api.DiagnosticSeverity;
 import dev.sakus.mcad.api.ExporterCapabilities;
 import dev.sakus.mcad.api.ExportOptions;
 import dev.sakus.mcad.api.GeneratedScene;
+import dev.sakus.mcad.api.LightDefinition;
 import dev.sakus.mcad.api.MaterialDefinition;
 import dev.sakus.mcad.api.MeshGroup;
 import dev.sakus.mcad.api.MeshPrimitive;
@@ -50,8 +53,6 @@ final class GltfPreflight {
         }
 
         DiagnosticSeverity lossSeverity = parsed.options().lossPolicy().severity();
-        reportUnsupported(diagnostics, lossSeverity, "lights", scene.lights());
-        reportUnsupported(diagnostics, lossSeverity, "cameras", scene.cameras());
         reportUnsupported(diagnostics, lossSeverity, "curves", scene.curves());
         reportUnsupported(diagnostics, lossSeverity, "bones", scene.bones());
 
@@ -63,20 +64,25 @@ final class GltfPreflight {
             }
         }
 
+        checkTransform(diagnostics, SceneContractAdapter.originTransform(scene), "scene origin transform");
+        checkTransform(diagnostics, parsed.options().transform(), "configured export transform");
+
         long estimatedBytes = 0L;
         Set<String> referencedMeshes = new HashSet<>();
         for (SceneNode node : scene.nodes()) {
             referencedMeshes.addAll(node.meshIds());
-            checkTransformFloatRange(diagnostics, node.localTransform(), "node '" + node.stableId() + "'");
-            if (!isUnitQuaternion(node.localTransform().rotation())) {
-                diagnostics.add(diagnostic(DiagnosticSeverity.WARNING, "gltf/quaternion-normalized",
-                        "Node '" + node.stableId() + "' rotation will be normalized for glTF."));
-            }
+            checkTransform(diagnostics, node.localTransform(), "node '" + node.stableId() + "'");
         }
-        checkTransformFloatRange(diagnostics, parsed.options().transform(), "configured export transform");
-        if (!isUnitQuaternion(parsed.options().transform().rotation())) {
-            diagnostics.add(diagnostic(DiagnosticSeverity.WARNING, "gltf/quaternion-normalized",
-                    "Configured export rotation will be normalized for glTF."));
+        for (LightDefinition light : scene.lights()) {
+            checkTransform(diagnostics, SceneContractAdapter.transform(light), "light '" + light.stableId() + "'");
+        }
+        for (CameraDefinition camera : scene.cameras()) {
+            checkTransform(diagnostics, SceneContractAdapter.transform(camera), "camera '" + camera.stableId() + "'");
+            if (camera.projection() == CameraProjection.ORTHOGRAPHIC && camera.farPlane().isEmpty()) {
+                diagnostics.add(diagnostic(lossSeverity, "gltf/unsupported-camera",
+                        "Orthographic camera '" + camera.stableId()
+                                + "' has no far plane; core glTF requires zfar, so the neutral camera record will be preserved in scene extras."));
+            }
         }
 
         for (MeshGroup mesh : scene.meshes()) {
@@ -151,7 +157,7 @@ final class GltfPreflight {
         if (!values.isEmpty()) {
             diagnostics.add(diagnostic(severity, "gltf/unsupported-scene-element",
                     "Scene contains " + values.size() + " " + type
-                            + "; full glTF semantics are unavailable in the current base contract, so neutral records will be preserved in scene extras."));
+                            + "; standard glTF semantics are not available, so neutral records will be preserved in scene extras."));
         }
     }
 
@@ -163,7 +169,7 @@ final class GltfPreflight {
         }
     }
 
-    private static void checkTransformFloatRange(
+    private static void checkTransform(
             List<Diagnostic> diagnostics,
             Transform transform,
             String field) {
@@ -173,6 +179,10 @@ final class GltfPreflight {
         checkFloatRange(diagnostics, transform.scale().x(), field + " scale.x");
         checkFloatRange(diagnostics, transform.scale().y(), field + " scale.y");
         checkFloatRange(diagnostics, transform.scale().z(), field + " scale.z");
+        if (!isUnitQuaternion(transform.rotation())) {
+            diagnostics.add(diagnostic(DiagnosticSeverity.WARNING, "gltf/quaternion-normalized",
+                    field + " rotation will be normalized for glTF."));
+        }
     }
 
     private static void checkFloatRange(List<Diagnostic> diagnostics, double value, String field) {
