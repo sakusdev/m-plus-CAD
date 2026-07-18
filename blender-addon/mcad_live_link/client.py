@@ -73,11 +73,11 @@ class LiveLinkClient:
         delay = 0.5
         while not self._stop.is_set():
             try:
-                current = self._connect()
+                current, buffered = self._connect()
                 self._socket = current
                 self._on_status(f"接続中  ws://{self._host}:{self._port}/mcad")
                 delay = 0.5
-                self._receive_loop(current)
+                self._receive_loop(current, buffered)
             except (OSError, ValueError, RuntimeError) as error:
                 if not self._stop.is_set():
                     self._on_status(f"再接続待機: {error}")
@@ -92,7 +92,7 @@ class LiveLinkClient:
             if not self._stop.wait(delay):
                 delay = min(delay * 1.7, 5.0)
 
-    def _connect(self) -> socket.socket:
+    def _connect(self) -> tuple[socket.socket, bytearray]:
         current = socket.create_connection((self._host, self._port), timeout=5.0)
         current.settimeout(5.0)
         key = base64.b64encode(os.urandom(16)).decode("ascii")
@@ -105,7 +105,7 @@ class LiveLinkClient:
             "Sec-WebSocket-Version: 13\r\n\r\n"
         )
         current.sendall(request.encode("ascii"))
-        header = self._read_http_header(current)
+        header, buffered = self._read_http_header(current)
         lines = header.decode("iso-8859-1").split("\r\n")
         if not lines or " 101 " not in lines[0]:
             current.close()
@@ -120,26 +120,26 @@ class LiveLinkClient:
             current.close()
             raise RuntimeError("WebSocket accept key mismatch")
         current.settimeout(1.0)
-        return current
+        return current, buffered
 
-    def _receive_loop(self, current: socket.socket) -> None:
+    def _receive_loop(self, current: socket.socket, buffered: bytearray) -> None:
         while not self._stop.is_set():
             try:
-                first = self._read_exact(current, 1)[0]
+                first = self._read_exact(current, 1, buffered)[0]
             except socket.timeout:
                 continue
-            second = self._read_exact(current, 1)[0]
+            second = self._read_exact(current, 1, buffered)[0]
             final_frame = bool(first & 0x80)
             opcode = first & 0x0F
             masked = bool(second & 0x80)
             length = second & 0x7F
             if length == 126:
-                length = struct.unpack("!H", self._read_exact(current, 2))[0]
+                length = struct.unpack("!H", self._read_exact(current, 2, buffered))[0]
             elif length == 127:
-                length = struct.unpack("!Q", self._read_exact(current, 8))[0]
+                length = struct.unpack("!Q", self._read_exact(current, 8, buffered))[0]
             if not final_frame or masked or length > _MAX_MESSAGE_BYTES:
                 raise RuntimeError("unsupported or oversized server frame")
-            payload = self._read_exact(current, length)
+            payload = self._read_exact(current, length, buffered)
             if opcode == 0x8:
                 self._send_frame(current, 0x8, payload)
                 return
@@ -167,7 +167,7 @@ class LiveLinkClient:
             current.sendall(header + mask + masked)
 
     @staticmethod
-    def _read_http_header(current: socket.socket) -> bytes:
+    def _read_http_header(current: socket.socket) -> tuple[bytes, bytearray]:
         result = bytearray()
         while b"\r\n\r\n" not in result:
             chunk = current.recv(1024)
@@ -177,13 +177,15 @@ class LiveLinkClient:
             if len(result) > 16384:
                 raise RuntimeError("WebSocket handshake exceeded size limit")
         header, _, remainder = bytes(result).partition(b"\r\n\r\n")
-        if remainder:
-            raise RuntimeError("unexpected frame bytes in handshake response")
-        return header + b"\r\n\r\n"
+        return header + b"\r\n\r\n", bytearray(remainder)
 
     @staticmethod
-    def _read_exact(current: socket.socket, size: int) -> bytes:
+    def _read_exact(current: socket.socket, size: int, buffered: bytearray) -> bytes:
         result = bytearray()
+        if buffered:
+            consumed = min(size, len(buffered))
+            result.extend(buffered[:consumed])
+            del buffered[:consumed]
         while len(result) < size:
             chunk = current.recv(size - len(result))
             if not chunk:
