@@ -64,7 +64,7 @@ No Minecraft texture extraction or bundling is permitted.
 - [ ] Incremental/differential file export
 - [ ] Memory-bounded snapshot and generation pipeline
 - [ ] LOD scene generation
-- [x] Collision and occluder metadata/meshes
+- [ ] Collision and occluder meshes
 - [ ] 3D-print diagnostics and printable-mesh transformations
 
 ## Wave 5 — Live and round-trip workflows
