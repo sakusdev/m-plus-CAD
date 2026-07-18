@@ -10,6 +10,7 @@ description = "Minecraft 26.2 Fabric client adapter for m+CAD"
 val minecraftVersion = providers.gradleProperty("minecraft_version")
 val loaderVersion = providers.gradleProperty("loader_version")
 val fabricApiVersion = providers.gradleProperty("fabric_api_version")
+val modVersion = version.toString()
 
 dependencies {
     minecraft("com.mojang:minecraft:${minecraftVersion.get()}")
@@ -32,8 +33,8 @@ fabricApi {
 }
 
 tasks.processResources {
-    inputs.property("version", project.version)
+    inputs.property("version", modVersion)
     filesMatching("fabric.mod.json") {
-        expand("version" to project.version)
+        expand("version" to modVersion)
     }
 }
