@@ -62,7 +62,7 @@ public final class McadClient implements ClientModInitializer {
             notify(minecraft, "m+CAD: 選択を解除しました");
         }
         while (openSettings.consumeClick()) {
-            minecraft.setScreen(new McadSettingsScreen(runtime, minecraft.currentScreen));
+            minecraft.setScreenAndShow(new McadSettingsScreen(runtime, minecraft.gui.screen()));
         }
         while (export.consumeClick()) {
             runtime.startExport(minecraft);
@@ -89,8 +89,9 @@ public final class McadClient implements ClientModInitializer {
         var result = runtime.selectionInteraction().apply(action, target);
         String label = action == SelectionInteractionController.Action.SET_START ? "始点" : "終点";
         notify(minecraft, "m+CAD: " + label + "を " + target.orElseThrow() + " に設定しました");
-        if (!result.validation().message().isBlank()) {
-            notify(minecraft, "m+CAD: " + result.validation().message());
+        String validation = result.snapshot().validation().message();
+        if (!validation.isBlank()) {
+            notify(minecraft, "m+CAD: " + validation);
         }
     }
 
