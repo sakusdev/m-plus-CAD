@@ -45,7 +45,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
-/** Owns all client-side m+CAD state and coordinates safe staged export operations. */
+/** Owns all client-side m+CAD state, export operations, and Blender Live Link. */
 public final class McadRuntime implements AutoCloseable {
     private static final Path SETTINGS_FILE = Path.of("settings.mcad");
     private static final int SNAPSHOT_CELLS_PER_TICK = 8_192;
@@ -66,6 +66,7 @@ public final class McadRuntime implements AutoCloseable {
     private final ProjectSettingsStore settingsStore;
     private final Path outputRoot;
     private final MarkerRuleSet markerRules = new MarkerRuleSet(MarkerRuleSet.CURRENT_SCHEMA_VERSION, List.of());
+    private final LiveLinkController liveLinkController = new LiveLinkController(pipeline, markerRules);
 
     private SnapshotCaptureSession captureSession;
     private ProjectSettings activeSettings;
@@ -131,6 +132,10 @@ public final class McadRuntime implements AutoCloseable {
         return Optional.ofNullable(lastOutput);
     }
 
+    public LiveLinkController.Status liveLinkStatus() {
+        return liveLinkController.status();
+    }
+
     public boolean busy() {
         return captureSession != null
                 || (activeWorker != null && !activeWorker.isDone())
@@ -149,21 +154,54 @@ public final class McadRuntime implements AutoCloseable {
 
     public void tick(Minecraft minecraft) {
         Objects.requireNonNull(minecraft, "minecraft");
-        if (captureSession == null) {
-            return;
-        }
-        try {
-            if (captureSession.step(SNAPSHOT_CELLS_PER_TICK) == SnapshotCaptureStatus.COMPLETE) {
-                StructureSnapshot snapshot = captureSession.snapshot();
+        if (captureSession != null) {
+            try {
+                if (captureSession.step(SNAPSHOT_CELLS_PER_TICK) == SnapshotCaptureStatus.COMPLETE) {
+                    StructureSnapshot snapshot = captureSession.snapshot();
+                    captureSession = null;
+                    submitDetachedPipeline(minecraft, snapshot);
+                }
+            } catch (CancellationException exception) {
                 captureSession = null;
-                submitDetachedPipeline(minecraft, snapshot);
+                finishCancelled(minecraft, "エクスポートをキャンセルしました");
+            } catch (RuntimeException exception) {
+                captureSession = null;
+                finishFailure(minecraft, "Snapshot取得に失敗しました: " + bounded(exception.getMessage()));
             }
-        } catch (CancellationException exception) {
-            captureSession = null;
-            finishCancelled(minecraft, "エクスポートをキャンセルしました");
-        } catch (RuntimeException exception) {
-            captureSession = null;
-            finishFailure(minecraft, "Snapshot取得に失敗しました: " + bounded(exception.getMessage()));
+        }
+        liveLinkController.tick(minecraft, selectionController, settings(), busy());
+    }
+
+    public boolean toggleLiveLink(Minecraft minecraft) {
+        Objects.requireNonNull(minecraft, "minecraft");
+        try {
+            LiveLinkController.Status status = liveLinkController.toggle();
+            if (status.session().running()) {
+                String message = "Blender Live Link開始: port " + status.session().port()
+                        + " / token " + status.session().token();
+                lastMessage = message;
+                notifyPlayer(minecraft, "m+CAD: " + message);
+            } else {
+                lastMessage = "Blender Live Linkを停止しました";
+                notifyPlayer(minecraft, "m+CAD: " + lastMessage);
+            }
+            return true;
+        } catch (IOException | RuntimeException exception) {
+            lastMessage = "Live Link開始失敗: " + bounded(exception.getMessage());
+            notifyPlayer(minecraft, "m+CAD: " + lastMessage);
+            return false;
+        }
+    }
+
+    public boolean requestLiveLinkSync(Minecraft minecraft) {
+        Objects.requireNonNull(minecraft, "minecraft");
+        try {
+            liveLinkController.requestSync();
+            notifyPlayer(minecraft, "m+CAD: Blenderへの即時同期を予約しました");
+            return true;
+        } catch (IllegalStateException exception) {
+            notifyPlayer(minecraft, "m+CAD: Live Linkを先に開始してください");
+            return false;
         }
     }
 
@@ -279,6 +317,7 @@ public final class McadRuntime implements AutoCloseable {
     @Override
     public void close() {
         requestCancellation();
+        liveLinkController.close();
         if (activeWorker != null) {
             activeWorker.cancel(true);
         }

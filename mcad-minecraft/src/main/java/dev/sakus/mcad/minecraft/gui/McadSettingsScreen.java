@@ -5,6 +5,7 @@ package dev.sakus.mcad.minecraft.gui;
 
 import dev.sakus.mcad.api.CanonicalIdentifier;
 import dev.sakus.mcad.api.ProjectSettings;
+import dev.sakus.mcad.minecraft.runtime.LiveLinkController;
 import dev.sakus.mcad.minecraft.runtime.McadRuntime;
 import dev.sakus.mcad.minecraft.selection.SelectionOverlayModel;
 
@@ -17,7 +18,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Functional Minecraft 26.2 settings and operation screen for the MVP. */
+/** Functional Minecraft 26.2 settings, export, and Blender Live Link screen. */
 public final class McadSettingsScreen extends Screen {
     private static final CanonicalIdentifier GLTF = CanonicalIdentifier.parse("mcad:gltf");
     private static final CanonicalIdentifier OBJ = CanonicalIdentifier.parse("mcad:obj");
@@ -36,10 +37,11 @@ public final class McadSettingsScreen extends Screen {
     @Override
     protected void init() {
         ProjectSettings settings = runtime.settings();
+        LiveLinkController.Status liveLink = runtime.liveLinkStatus();
         int columnWidth = Math.min(210, Math.max(130, (width - 36) / 2));
         int left = width / 2 - columnWidth - 4;
         int right = width / 2 + 4;
-        int y = 42;
+        int y = 34;
 
         add(left, y, columnWidth, "出力形式: " + outputLabel(settings), this::cycleOutput);
         add(right, y, columnWidth, "出力先: " + settings.output().destination(), this::cycleDestinationName);
@@ -60,6 +62,11 @@ public final class McadSettingsScreen extends Screen {
         add(left, y, columnWidth, "選択枠: " + onOff(settings.preview().selectionOutline()), this::toggleOutline);
         add(right, y, columnWidth, "最大ブロック: " + settings.selection().maximumBlockCount(), this::cycleMaximumBlocks);
         y += ROW_STEP;
+        add(left, y, columnWidth,
+                liveLink.session().running() ? "Blender Live Link停止" : "Blender Live Link開始",
+                this::toggleLiveLink);
+        add(right, y, columnWidth, "Blenderへ今すぐ同期", this::syncLiveLink);
+        y += ROW_STEP;
         add(left, y, columnWidth, "設定を保存", this::save);
         add(right, y, columnWidth, runtime.busy() ? "処理中—キャンセル" : "エクスポート開始", this::startOrCancel);
         y += ROW_STEP;
@@ -71,7 +78,15 @@ public final class McadSettingsScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
-        graphics.text(font, title, width / 2 - font.width(title) / 2, 14, 0xFFFFFFFF, true);
+        graphics.text(font, title, width / 2 - font.width(title) / 2, 10, 0xFFFFFFFF, true);
+
+        LiveLinkController.Status liveLink = runtime.liveLinkStatus();
+        String liveLinkText = liveLink.session().running()
+                ? "Live Link: port " + liveLink.session().port()
+                        + " / clients " + liveLink.session().clientCount()
+                        + " / token " + liveLink.session().token()
+                : "Live Link: OFF（Lで開始）";
+        graphics.text(font, liveLinkText, 18, height - 55, 0xFF66FFAA, true);
 
         SelectionOverlayModel overlay = runtime.selectionOverlay();
         String selection = overlay.wireframe().isPresent()
@@ -82,7 +97,8 @@ public final class McadSettingsScreen extends Screen {
         OperationProgressModel.Snapshot progress = runtime.progress();
         graphics.text(font, progress.state() + "  " + progress.message(), 18, height - 29,
                 progress.active() ? 0xFFFFFF55 : 0xFFAAAAAA, true);
-        graphics.text(font, runtime.lastMessage(), 18, height - 16, 0xFFAAAAAA, true);
+        String status = liveLink.session().running() ? liveLink.message() : runtime.lastMessage();
+        graphics.text(font, status, 18, height - 16, 0xFFAAAAAA, true);
     }
 
     @Override
@@ -202,6 +218,14 @@ public final class McadSettingsScreen extends Screen {
             return draft.withSelection(new ProjectSettings.SelectionSettings(
                     next, draft.value().selection().preserveEmptyCells()));
         });
+    }
+
+    private void toggleLiveLink() {
+        runtime.toggleLiveLink(Minecraft.getInstance());
+    }
+
+    private void syncLiveLink() {
+        runtime.requestLiveLinkSync(Minecraft.getInstance());
     }
 
     private void save() {

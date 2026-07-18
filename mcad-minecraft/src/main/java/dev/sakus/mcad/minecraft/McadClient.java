@@ -18,7 +18,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
-/** Physical-client entrypoint wiring the complete m+CAD MVP runtime. */
+/** Physical-client entrypoint wiring export and Blender Live Link. */
 public final class McadClient implements ClientModInitializer {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath("m_plus_cad", "main"));
@@ -31,6 +31,8 @@ public final class McadClient implements ClientModInitializer {
     private KeyMapping openSettings;
     private KeyMapping export;
     private KeyMapping cancel;
+    private KeyMapping toggleLiveLink;
+    private KeyMapping syncLiveLink;
 
     @Override
     public void onInitializeClient() {
@@ -44,6 +46,8 @@ public final class McadClient implements ClientModInitializer {
         openSettings = register("key.m_plus_cad.open_settings", GLFW.GLFW_KEY_O);
         export = register("key.m_plus_cad.export", GLFW.GLFW_KEY_P);
         cancel = register("key.m_plus_cad.cancel", GLFW.GLFW_KEY_K);
+        toggleLiveLink = register("key.m_plus_cad.toggle_live_link", GLFW.GLFW_KEY_L);
+        syncLiveLink = register("key.m_plus_cad.sync_live_link", GLFW.GLFW_KEY_I);
 
         ClientTickEvents.END_CLIENT_TICK.register(this::endClientTick);
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> runtime.close());
@@ -71,6 +75,12 @@ public final class McadClient implements ClientModInitializer {
             if (!runtime.requestCancellation()) {
                 notify(minecraft, "m+CAD: キャンセル可能な処理はありません");
             }
+        }
+        while (toggleLiveLink.consumeClick()) {
+            runtime.toggleLiveLink(minecraft);
+        }
+        while (syncLiveLink.consumeClick()) {
+            runtime.requestLiveLinkSync(minecraft);
         }
 
         runtime.tick(minecraft);

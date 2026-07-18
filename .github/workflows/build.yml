@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [main, integration/mcad]
+    branches: [main, integration/mcad, integration/live-link]
   pull_request:
 
 permissions:
@@ -29,6 +29,14 @@ jobs:
             exit 1
           fi
           tail -n 40 gradle-build.log
+      - name: Validate and test Blender add-on
+        shell: bash
+        run: |
+          python3 -m compileall -q blender-addon/mcad_live_link blender-addon/tests
+          python3 -m unittest discover -s blender-addon/tests -v
+          find blender-addon -type d -name __pycache__ -prune -exec rm -rf {} +
+          find blender-addon -type f -name '*.pyc' -delete
+          (cd blender-addon && zip -q -r ../m-plus-cad-blender-addon.zip mcad_live_link)
       - name: Upload runnable Fabric mod
         uses: actions/upload-artifact@v4
         with:
@@ -38,6 +46,13 @@ jobs:
             !mcad-minecraft/build/libs/*-sources.jar
             !mcad-minecraft/build/libs/*-javadoc.jar
             !mcad-minecraft/build/libs/*-dev.jar
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload Blender add-on
+        uses: actions/upload-artifact@v4
+        with:
+          name: m-plus-cad-blender-addon
+          path: m-plus-cad-blender-addon.zip
           if-no-files-found: error
           retention-days: 14
       - name: Upload Gradle log

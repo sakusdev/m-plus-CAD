@@ -5,5 +5,7 @@
   "key.m_plus_cad.clear_selection": "Clear selection",
   "key.m_plus_cad.open_settings": "Open m+CAD settings",
   "key.m_plus_cad.export": "Start export",
-  "key.m_plus_cad.cancel": "Cancel operation"
+  "key.m_plus_cad.cancel": "Cancel operation",
+  "key.m_plus_cad.toggle_live_link": "Start or stop Blender Live Link",
+  "key.m_plus_cad.sync_live_link": "Sync to Blender now"
 }
