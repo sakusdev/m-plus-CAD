@@ -69,6 +69,7 @@ public final class LiveLinkController implements AutoCloseable {
     private int ticksUntilPoll;
     private int previousClientCount;
     private boolean forceCapture = true;
+    private boolean captureForceFull;
     private boolean scenePublished;
     private String message = "停止中";
 
@@ -124,7 +125,7 @@ public final class LiveLinkController implements AutoCloseable {
         }
 
         int clients = session.status().clientCount();
-        if (clients > previousClientCount && !scenePublished) {
+        if (clients > previousClientCount) {
             forceCapture = true;
             ticksUntilPoll = 0;
         }
@@ -191,9 +192,9 @@ public final class LiveLinkController implements AutoCloseable {
                             bounds.minInclusive().y(),
                             bounds.minInclusive().z()),
                     new BlockPosition(
-                            bounds.maxInclusive().x(),
-                            bounds.maxInclusive().y(),
-                            bounds.maxInclusive().z()));
+                            Math.toIntExact(bounds.maxExclusiveX()),
+                            Math.toIntExact(bounds.maxExclusiveY()),
+                            Math.toIntExact(bounds.maxExclusiveZ())));
             long configuredMaximum = settings.selection().maximumBlockCount();
             long maxCells = Math.min(configuredMaximum, SnapshotLimits.defaults().maxCells());
             SnapshotLimits limits = new SnapshotLimits(
@@ -204,6 +205,7 @@ public final class LiveLinkController implements AutoCloseable {
                     (int) Math.min(maxCells, Integer.MAX_VALUE),
                     1_024);
             captureSettings = settings;
+            captureForceFull = forceCapture;
             buildCancellation = new AtomicBoolean();
             CancellationToken cancellation = buildCancellation::get;
             captureSession = snapshotAdapter.beginCapture(
@@ -218,6 +220,7 @@ public final class LiveLinkController implements AutoCloseable {
         } catch (IllegalArgumentException | ArithmeticException exception) {
             message = "Live Link Snapshotを開始できません: " + bounded(exception.getMessage());
             captureSession = null;
+            captureForceFull = false;
         }
     }
 
@@ -230,20 +233,24 @@ public final class LiveLinkController implements AutoCloseable {
             captureSession = null;
             ProjectSettings settings = Objects.requireNonNull(captureSettings, "captureSettings");
             captureSettings = null;
+            boolean forceFull = captureForceFull;
+            captureForceFull = false;
             int settingsHash = settings.hashCode();
-            if (!forceCapture
+            if (!forceFull
                     && snapshot.snapshotId().equals(publishedSnapshotId)
                     && settingsHash == publishedSettingsHash) {
                 message = "Live Link変更なし";
                 return;
             }
-            submitSceneBuild(minecraft, snapshot, settings, settingsHash);
+            submitSceneBuild(minecraft, snapshot, settings, settingsHash, forceFull);
         } catch (CancellationException exception) {
             captureSession = null;
             captureSettings = null;
+            captureForceFull = false;
         } catch (RuntimeException exception) {
             captureSession = null;
             captureSettings = null;
+            captureForceFull = false;
             message = "Live Link Snapshot失敗: " + bounded(exception.getMessage());
         }
     }
@@ -252,7 +259,8 @@ public final class LiveLinkController implements AutoCloseable {
             Minecraft minecraft,
             StructureSnapshot snapshot,
             ProjectSettings settings,
-            int settingsHash) {
+            int settingsHash,
+            boolean forceFull) {
         long requestedGeneration = Math.incrementExact(generation);
         AtomicBoolean cancellation = buildCancellation;
         buildFuture = worker.submit(() -> {
@@ -264,7 +272,7 @@ public final class LiveLinkController implements AutoCloseable {
                         ProgressReporter.NONE,
                         cancellation::get);
                 minecraft.execute(() -> finishBuild(
-                        requestedGeneration, snapshot.snapshotId(), settingsHash, build));
+                        requestedGeneration, snapshot.snapshotId(), settingsHash, forceFull, build));
             } catch (CancellationException ignored) {
                 // Superseded selection/settings builds are intentionally discarded.
             } catch (RuntimeException exception) {
@@ -278,11 +286,12 @@ public final class LiveLinkController implements AutoCloseable {
             long requestedGeneration,
             String snapshotId,
             int settingsHash,
+            boolean forceFull,
             MvpPipeline.SceneBuild build) {
         if (requestedGeneration != generation || !session.status().running()) {
             return;
         }
-        LiveLinkSession.PublishResult result = session.publish(build.scene(), !scenePublished);
+        LiveLinkSession.PublishResult result = session.publish(build.scene(), forceFull || !scenePublished);
         scenePublished = true;
         publishedSnapshotId = snapshotId;
         publishedSettingsHash = settingsHash;
@@ -297,6 +306,7 @@ public final class LiveLinkController implements AutoCloseable {
         buildCancellation.set(true);
         captureSession = null;
         captureSettings = null;
+        captureForceFull = false;
         if (buildFuture != null && !buildFuture.isDone()) {
             buildFuture.cancel(true);
         }
