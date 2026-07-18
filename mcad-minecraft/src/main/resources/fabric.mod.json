@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "m_plus_cad",
+  "version": "${version}",
+  "name": "m+CAD",
+  "description": "Minecraftをブロックベースの3Dモデリング環境として利用するclient-only Fabric mod",
+  "license": "MPL-2.0",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.sakus.mcad.minecraft.McadClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "java": ">=25",
+    "fabric-api": ">=0.154.2"
+  }
+}
