@@ -67,10 +67,10 @@ class FakeWebSocketServer:
                     "Upgrade: websocket\r\n"
                     "Connection: Upgrade\r\n"
                     f"Sec-WebSocket-Accept: {accept}\r\n\r\n"
-                )
-                connection.sendall(response.encode("ascii"))
+                ).encode("ascii")
+                # Deliberately coalesce the HTTP upgrade and first WebSocket frame.
                 encoded = self.payload.encode("utf-8")
-                connection.sendall(self._frame(encoded))
+                connection.sendall(response + self._frame(encoded))
                 time.sleep(0.1)
         except BaseException as error:  # noqa: BLE001 - propagated to the unittest thread.
             self.error = error
@@ -97,7 +97,7 @@ class FakeWebSocketServer:
 
 
 class LiveLinkClientTest(unittest.TestCase):
-    def test_connects_with_token_and_receives_text_frame(self) -> None:
+    def test_connects_with_token_and_receives_coalesced_first_frame(self) -> None:
         token = "0123456789abcdef0123456789abcdef"
         payload = '{"protocol":"mcad-live-link","version":1}'
         server = FakeWebSocketServer(token, payload)
