@@ -14,7 +14,6 @@ import dev.sakus.mcad.markers.MarkerRuleSet;
 import dev.sakus.mcad.minecraft.gui.OperationProgressBridge;
 import dev.sakus.mcad.minecraft.gui.OperationProgressModel;
 import dev.sakus.mcad.minecraft.gui.settings.ProjectSettingsCodec;
-import dev.sakus.mcad.minecraft.gui.settings.ProjectSettingsDraft;
 import dev.sakus.mcad.minecraft.gui.settings.ProjectSettingsStore;
 import dev.sakus.mcad.minecraft.gui.settings.SettingsShellController;
 import dev.sakus.mcad.minecraft.selection.SelectionBounds;
@@ -133,7 +132,8 @@ public final class McadRuntime implements AutoCloseable {
     }
 
     public boolean busy() {
-        return captureSession != null || (activeWorker != null && !activeWorker.isDone())
+        return captureSession != null
+                || (activeWorker != null && !activeWorker.isDone())
                 || progressModel.snapshot().active();
     }
 
@@ -153,8 +153,7 @@ public final class McadRuntime implements AutoCloseable {
             return;
         }
         try {
-            SnapshotCaptureStatus status = captureSession.step(SNAPSHOT_CELLS_PER_TICK);
-            if (status == SnapshotCaptureStatus.COMPLETE) {
+            if (captureSession.step(SNAPSHOT_CELLS_PER_TICK) == SnapshotCaptureStatus.COMPLETE) {
                 StructureSnapshot snapshot = captureSession.snapshot();
                 captureSession = null;
                 submitDetachedPipeline(minecraft, snapshot);
@@ -198,7 +197,8 @@ public final class McadRuntime implements AutoCloseable {
             activeDestination = resolveOutput(activeSettings.output().destination());
             Files.createDirectories(Objects.requireNonNull(activeDestination.getParent(), "output parent"));
             SnapshotSelection selection = snapshotSelection(bounds.orElseThrow());
-            long maxCells = activeSettings.selection().maximumBlockCount();
+            long configuredMaximum = activeSettings.selection().maximumBlockCount();
+            long maxCells = Math.min(configuredMaximum, SnapshotLimits.defaults().maxCells());
             SnapshotLimits limits = new SnapshotLimits(
                     512,
                     512,
@@ -231,10 +231,7 @@ public final class McadRuntime implements AutoCloseable {
     }
 
     public boolean requestCancellation() {
-        if (!busy()) {
-            return false;
-        }
-        return progressModel.requestCancellation();
+        return busy() && progressModel.requestCancellation();
     }
 
     public void selectExporter(CanonicalIdentifier exporterId) {
@@ -381,13 +378,15 @@ public final class McadRuntime implements AutoCloseable {
     }
 
     private static SnapshotSelection snapshotSelection(SelectionBounds bounds) {
-        int maxX = Math.toIntExact(bounds.maxExclusiveX());
-        int maxY = Math.toIntExact(bounds.maxExclusiveY());
-        int maxZ = Math.toIntExact(bounds.maxExclusiveZ());
         return new SnapshotSelection(
                 new BlockPosition(
-                        bounds.minInclusive().x(), bounds.minInclusive().y(), bounds.minInclusive().z()),
-                new BlockPosition(maxX, maxY, maxZ));
+                        bounds.minInclusive().x(),
+                        bounds.minInclusive().y(),
+                        bounds.minInclusive().z()),
+                new BlockPosition(
+                        Math.toIntExact(bounds.maxExclusiveX()),
+                        Math.toIntExact(bounds.maxExclusiveY()),
+                        Math.toIntExact(bounds.maxExclusiveZ())));
     }
 
     private void clearActiveRequest() {
@@ -400,7 +399,7 @@ public final class McadRuntime implements AutoCloseable {
 
     private static void notifyPlayer(Minecraft minecraft, String message) {
         if (minecraft.player != null) {
-            minecraft.player.displayClientMessage(Component.literal(message), true);
+            minecraft.player.sendSystemMessage(Component.literal(message));
         }
     }
 
