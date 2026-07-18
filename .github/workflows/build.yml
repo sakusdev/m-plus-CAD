@@ -24,11 +24,21 @@ jobs:
         shell: bash
         run: |
           chmod +x gradlew
-          if ! ./gradlew --no-daemon --console=plain clean check >gradle-build.log 2>&1; then
+          if ! ./gradlew --no-daemon --console=plain clean build >gradle-build.log 2>&1; then
             tail -n 100 gradle-build.log
             exit 1
           fi
           tail -n 40 gradle-build.log
+      - name: Upload runnable Fabric mod
+        uses: actions/upload-artifact@v4
+        with:
+          name: m-plus-cad-fabric
+          path: |
+            mcad-minecraft/build/libs/*.jar
+            !mcad-minecraft/build/libs/*-sources.jar
+            !mcad-minecraft/build/libs/*-dev.jar
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload Gradle log
         if: always()
         uses: actions/upload-artifact@v4
