@@ -23,10 +23,8 @@ import dev.sakus.mcad.materials.MaterialResolver;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 /** Complete loader-independent processing path used by the Fabric runtime and end-to-end tests. */
@@ -95,7 +93,8 @@ public final class MvpPipeline {
 
         cancellation.throwIfCancellationRequested();
         GeneratedScene generated = meshGenerator.generate(processed, settings, cancellation, progress);
-        GeneratedScene scene = SceneAssembler.assemble(generated, settings, markerResult, materialResolver);
+        GeneratedScene scene = SceneAssembler.assemble(
+                generated, processed, settings, markerResult, materialResolver);
         ExportOptions options = exportOptions(settings, exporter);
         ExportResult result = exporter.export(scene, destination, options, progress, cancellation);
         return new Output(processed, markerResult, scene, result);
@@ -109,7 +108,7 @@ public final class MvpPipeline {
         ProjectSettings.TransformSettings transform = settings.transform();
 
         if (exporter.formatId().equals(CanonicalIdentifier.parse("mcad:obj"))) {
-            values.put(CanonicalIdentifier.parse("mcad:transform/origin_offset"), vector(transform.explicitOriginOffset()));
+            values.put(CanonicalIdentifier.parse("mcad:transform/origin_offset"), vector(Vec3d.ZERO));
             values.put(CanonicalIdentifier.parse("mcad:transform/rotation_degrees"), vector(transform.rotationDegrees()));
             values.put(CanonicalIdentifier.parse("mcad:transform/unit_scale"),
                     new MetadataValue.DoubleValue(transform.unitScale()));
@@ -118,10 +117,9 @@ public final class MvpPipeline {
             values.put(CanonicalIdentifier.parse("mcad:loss_policy"),
                     new MetadataValue.StringValue(settings.output().lossPolicy().name().toLowerCase(java.util.Locale.ROOT)));
         } else if (exporter.formatId().equals(CanonicalIdentifier.parse("mcad:gltf"))) {
-            Vec3d offset = transform.explicitOriginOffset();
-            values.put(CanonicalIdentifier.parse("mcad:gltf/translation"),
-                    vector(new Vec3d(-offset.x(), -offset.y(), -offset.z())));
-            values.put(CanonicalIdentifier.parse("mcad:gltf/rotation"), quaternion(eulerQuaternion(transform.rotationDegrees())));
+            values.put(CanonicalIdentifier.parse("mcad:gltf/translation"), vector(Vec3d.ZERO));
+            values.put(CanonicalIdentifier.parse("mcad:gltf/rotation"),
+                    quaternion(eulerQuaternion(transform.rotationDegrees())));
             values.put(CanonicalIdentifier.parse("mcad:gltf/scale"),
                     vector(new Vec3d(transform.unitScale(), transform.unitScale(), transform.unitScale())));
             values.put(CanonicalIdentifier.parse("mcad:gltf/loss-policy"),
