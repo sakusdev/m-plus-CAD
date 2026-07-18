@@ -5,8 +5,8 @@ package dev.sakus.mcad.minecraft.gui;
 
 import dev.sakus.mcad.api.CanonicalIdentifier;
 import dev.sakus.mcad.api.ProjectSettings;
-import dev.sakus.mcad.api.Vec3d;
 import dev.sakus.mcad.minecraft.runtime.McadRuntime;
+import dev.sakus.mcad.minecraft.selection.SelectionOverlayModel;
 
 import java.io.IOException;
 import java.util.List;
@@ -45,32 +45,25 @@ public final class McadSettingsScreen extends Screen {
         add(left, y, columnWidth, "出力形式: " + outputLabel(settings), this::cycleOutput);
         add(right, y, columnWidth, "出力先: " + settings.output().destination(), this::cycleDestinationName);
         y += ROW_STEP;
-
         add(left, y, columnWidth,
                 "内部面除去: " + onOff(settings.geometry().hiddenFaceRemoval()), runtime::toggleHiddenFaceRemoval);
         add(right, y, columnWidth, "マテリアル: " + settings.materials().mode(), runtime::cycleMaterialMode);
         y += ROW_STEP;
-
         add(left, y, columnWidth, "単位倍率: " + settings.transform().unitScale(), this::cycleScale);
         add(right, y, columnWidth, "座標軸: " + settings.transform().targetAxis(), this::cycleAxis);
         y += ROW_STEP;
-
         add(left, y, columnWidth, "原点: " + settings.transform().originMode(), this::cycleOrigin);
         add(right, y, columnWidth, "マーカー: " + onOff(settings.markers().enabled()), this::toggleMarkers);
         y += ROW_STEP;
-
         add(left, y, columnWidth, "コリジョン: " + onOff(settings.collision().enabled()), this::toggleCollision);
         add(right, y, columnWidth, "損失時: " + settings.output().lossPolicy(), this::toggleLossPolicy);
         y += ROW_STEP;
-
         add(left, y, columnWidth, "選択枠: " + onOff(settings.preview().selectionOutline()), this::toggleOutline);
         add(right, y, columnWidth, "最大ブロック: " + settings.selection().maximumBlockCount(), this::cycleMaximumBlocks);
         y += ROW_STEP;
-
         add(left, y, columnWidth, "設定を保存", this::save);
         add(right, y, columnWidth, runtime.busy() ? "処理中—キャンセル" : "エクスポート開始", this::startOrCancel);
         y += ROW_STEP;
-
         add(width / 2 - columnWidth / 2, y, columnWidth, "閉じる", this::onClose);
     }
 
@@ -86,14 +79,14 @@ public final class McadSettingsScreen extends Screen {
         graphics.text(font, selection, 18, height - 42, 0xFFE0E0E0, true);
 
         OperationProgressModel.Snapshot progress = runtime.progress();
-        String progressText = progress.state() + "  " + progress.message();
-        graphics.text(font, progressText, 18, height - 29, progress.active() ? 0xFFFFFF55 : 0xFFAAAAAA, true);
+        graphics.text(font, progress.state() + "  " + progress.message(), 18, height - 29,
+                progress.active() ? 0xFFFFFF55 : 0xFFAAAAAA, true);
         graphics.text(font, runtime.lastMessage(), 18, height - 16, 0xFFAAAAAA, true);
     }
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(parent);
+        Minecraft.getInstance().setScreenAndShow(parent);
     }
 
     private void add(int x, int y, int buttonWidth, String label, Runnable action) {
@@ -104,7 +97,7 @@ public final class McadSettingsScreen extends Screen {
     }
 
     private void refresh() {
-        Minecraft.getInstance().setScreen(new McadSettingsScreen(runtime, parent));
+        Minecraft.getInstance().setScreenAndShow(new McadSettingsScreen(runtime, parent));
     }
 
     private void cycleOutput() {
@@ -135,72 +128,69 @@ public final class McadSettingsScreen extends Screen {
         edit(settings -> {
             double previous = settings.transform().unitScale();
             double next = previous < 0.75 ? 1.0 : previous < 1.5 ? 2.0 : 0.5;
-            ProjectSettings.TransformSettings transform = settings.transform();
+            ProjectSettings.TransformSettings value = settings.transform();
             return new ProjectSettings.TransformSettings(
-                    transform.originMode(), transform.explicitOriginOffset(), transform.rotationDegrees(),
-                    next, transform.targetAxis());
+                    value.originMode(), value.explicitOriginOffset(), value.rotationDegrees(), next, value.targetAxis());
         });
     }
 
     private void cycleAxis() {
         edit(settings -> {
-            ProjectSettings.TransformSettings transform = settings.transform();
+            ProjectSettings.TransformSettings value = settings.transform();
             ProjectSettings.AxisConvention[] values = ProjectSettings.AxisConvention.values();
-            ProjectSettings.AxisConvention next = values[(transform.targetAxis().ordinal() + 1) % values.length];
+            ProjectSettings.AxisConvention next = values[(value.targetAxis().ordinal() + 1) % values.length];
             return new ProjectSettings.TransformSettings(
-                    transform.originMode(), transform.explicitOriginOffset(), transform.rotationDegrees(),
-                    transform.unitScale(), next);
+                    value.originMode(), value.explicitOriginOffset(), value.rotationDegrees(), value.unitScale(), next);
         });
     }
 
     private void cycleOrigin() {
         edit(settings -> {
-            ProjectSettings.TransformSettings transform = settings.transform();
+            ProjectSettings.TransformSettings value = settings.transform();
             List<ProjectSettings.OriginMode> supported = List.of(
                     ProjectSettings.OriginMode.SELECTION_MINIMUM,
                     ProjectSettings.OriginMode.SELECTION_CENTRE,
                     ProjectSettings.OriginMode.BOTTOM_CENTRE,
                     ProjectSettings.OriginMode.EXPLICIT_OFFSET,
                     ProjectSettings.OriginMode.MARKER_DEFINED);
-            int index = supported.indexOf(transform.originMode());
+            int index = supported.indexOf(value.originMode());
             ProjectSettings.OriginMode next = supported.get((Math.max(index, 0) + 1) % supported.size());
             return new ProjectSettings.TransformSettings(
-                    next, transform.explicitOriginOffset(), transform.rotationDegrees(),
-                    transform.unitScale(), transform.targetAxis());
+                    next, value.explicitOriginOffset(), value.rotationDegrees(), value.unitScale(), value.targetAxis());
         });
     }
 
     private void toggleMarkers() {
         runtime.settingsController().edit(draft -> {
-            ProjectSettings.MarkerSettings previous = draft.value().markers();
+            ProjectSettings.MarkerSettings value = draft.value().markers();
             return draft.withMarkers(new ProjectSettings.MarkerSettings(
-                    !previous.enabled(), previous.consumeSemanticSources(), previous.previewInterpretation()));
+                    !value.enabled(), value.consumeSemanticSources(), value.previewInterpretation()));
         });
     }
 
     private void toggleCollision() {
         runtime.settingsController().edit(draft -> {
-            ProjectSettings.CollisionSettings previous = draft.value().collision();
-            return draft.withCollision(new ProjectSettings.CollisionSettings(!previous.enabled(), previous.defaultKind()));
+            ProjectSettings.CollisionSettings value = draft.value().collision();
+            return draft.withCollision(new ProjectSettings.CollisionSettings(!value.enabled(), value.defaultKind()));
         });
     }
 
     private void toggleLossPolicy() {
         runtime.settingsController().edit(draft -> {
-            ProjectSettings.OutputSettings previous = draft.value().output();
-            ProjectSettings.LossPolicy next = previous.lossPolicy() == ProjectSettings.LossPolicy.FAIL
+            ProjectSettings.OutputSettings value = draft.value().output();
+            ProjectSettings.LossPolicy next = value.lossPolicy() == ProjectSettings.LossPolicy.FAIL
                     ? ProjectSettings.LossPolicy.WARN_AND_CONTINUE
                     : ProjectSettings.LossPolicy.FAIL;
             return draft.withOutput(new ProjectSettings.OutputSettings(
-                    previous.exporterId(), previous.destination(), next, previous.exporterOptions()));
+                    value.exporterId(), value.destination(), next, value.exporterOptions()));
         });
     }
 
     private void toggleOutline() {
         runtime.settingsController().edit(draft -> {
-            ProjectSettings.PreviewSettings previous = draft.value().preview();
+            ProjectSettings.PreviewSettings value = draft.value().preview();
             return draft.withPreview(new ProjectSettings.PreviewSettings(
-                    !previous.selectionOutline(), previous.diagnosticsOverlay(), previous.consumedMarkers()));
+                    !value.selectionOutline(), value.diagnosticsOverlay(), value.consumedMarkers()));
         });
     }
 
