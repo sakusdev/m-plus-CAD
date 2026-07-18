@@ -11,6 +11,7 @@ import dev.sakus.mcad.api.ApiVersions;
 import dev.sakus.mcad.api.GeneratedScene;
 import dev.sakus.mcad.api.MeshGroup;
 import dev.sakus.mcad.api.MeshPrimitive;
+import dev.sakus.mcad.api.Quaterniond;
 import dev.sakus.mcad.api.SceneNode;
 import dev.sakus.mcad.api.SceneStatistics;
 import dev.sakus.mcad.api.Transform;
@@ -19,9 +20,13 @@ import dev.sakus.mcad.api.Vec3d;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class SceneDeltaEncoderTest {
+    private static final Pattern ORIGIN_TRANSLATION = Pattern.compile(
+            "\\\"origin\\\":\\{\\\"translation\\\":\\[([^,]+),([^,]+),([^\\]]+)]");
+
     private final SceneDeltaEncoder encoder = new SceneDeltaEncoder();
 
     @Test
@@ -62,7 +67,29 @@ class SceneDeltaEncoderTest {
         assertTrue(delta.json().contains("\"nodes\":[\"node/root\"]"));
     }
 
+    @Test
+    void composesSceneOriginWithBlenderZUpAndUnitScale() {
+        Transform sourceOrigin = new Transform(
+                new Vec3d(-1.0, -2.0, -3.0), Quaterniond.IDENTITY, Vec3d.ONE);
+        Quaterniond blenderZUp = new Quaterniond(
+                Math.sin(Math.PI * 0.25), 0.0, 0.0, Math.cos(Math.PI * 0.25));
+        Transform display = new Transform(
+                Vec3d.ZERO, blenderZUp, new Vec3d(2.0, 2.0, 2.0));
+        LiveSceneSnapshot snapshot = LiveSceneSnapshot.capture(scene(0.0, sourceOrigin), display);
+
+        var matcher = ORIGIN_TRANSLATION.matcher(snapshot.sceneMetadataJson());
+        assertTrue(matcher.find());
+        assertEquals(-2.0, Double.parseDouble(matcher.group(1)), 1.0e-12);
+        assertEquals(6.0, Double.parseDouble(matcher.group(2)), 1.0e-12);
+        assertEquals(-4.0, Double.parseDouble(matcher.group(3)), 1.0e-12);
+        assertTrue(snapshot.sceneMetadataJson().contains("\"scale\":[2.0,2.0,2.0]"));
+    }
+
     private static GeneratedScene scene(double x) {
+        return scene(x, Transform.IDENTITY);
+    }
+
+    private static GeneratedScene scene(double x, Transform origin) {
         MeshPrimitive primitive = new MeshPrimitive(
                 List.of(new Vec3d(x, 0, 0), new Vec3d(1, 0, 0), new Vec3d(0, 1, 0)),
                 List.of(new Vec3d(0, 0, 1), new Vec3d(0, 0, 1), new Vec3d(0, 0, 1)),
@@ -83,7 +110,7 @@ class SceneDeltaEncoderTest {
         return new GeneratedScene(
                 ApiVersions.GENERATED_SCENE,
                 "scene/live-link-test",
-                Transform.IDENTITY,
+                origin,
                 List.of(root.stableId()),
                 List.of(root),
                 List.of(mesh),
