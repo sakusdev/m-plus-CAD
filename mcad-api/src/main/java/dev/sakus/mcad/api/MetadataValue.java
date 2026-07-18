@@ -7,9 +7,29 @@ package dev.sakus.mcad.api;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.StringJoiner;
 
 public sealed interface MetadataValue permits MetadataValue.StringValue, MetadataValue.LongValue,
         MetadataValue.DoubleValue, MetadataValue.BooleanValue, MetadataValue.ListValue, MetadataValue.MapValue {
+
+    default String stableSortKey() {
+        return switch (this) {
+            case StringValue stringValue -> "s:" + stringValue.value().length() + ":" + stringValue.value();
+            case LongValue longValue -> "l:" + longValue.value();
+            case DoubleValue doubleValue -> "d:" + Double.toHexString(doubleValue.value());
+            case BooleanValue booleanValue -> "b:" + booleanValue.value();
+            case ListValue listValue -> {
+                var joiner = new StringJoiner(",", "[", "]");
+                listValue.values().forEach(value -> joiner.add(value.stableSortKey()));
+                yield joiner.toString();
+            }
+            case MapValue mapValue -> {
+                var joiner = new StringJoiner(",", "{", "}");
+                mapValue.values().forEach((key, value) -> joiner.add(key + "=" + value.stableSortKey()));
+                yield joiner.toString();
+            }
+        };
+    }
 
     record StringValue(String value) implements MetadataValue {
         public StringValue {

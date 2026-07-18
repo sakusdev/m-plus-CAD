@@ -50,7 +50,7 @@ public record SceneNode(
         }
         customProperties = Checks.immutableSortedMap(
                 customProperties, CanonicalIdentifier::compareTo, "customProperties");
-        sourceReferences = Checks.immutableSortedList(
+        sourceReferences = Checks.immutableDistinctSortedList(
                 sourceReferences,
                 Comparator.comparing(SourceReference::stableSortKey),
                 "sourceReferences");

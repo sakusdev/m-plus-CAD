@@ -4,6 +4,7 @@
 package dev.sakus.mcad.api;
 
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -36,9 +37,34 @@ class ExporterContractTest {
     }
 
     @Test
-    void producedFilesRejectTraversalAndFailedExportsPublishNothing() {
-        assertThrows(IllegalArgumentException.class, () -> new ProducedFile("../model.obj", 1, Optional.empty(), Optional.empty()));
+    void diagnosticOrderingIncludesDetails() {
+        var detailKey = CanonicalIdentifier.parse("mcad:value");
+        var later = new Diagnostic(
+                DiagnosticSeverity.WARNING,
+                CanonicalIdentifier.parse("mcad:warning"),
+                "same",
+                Optional.empty(),
+                Map.of(detailKey, new MetadataValue.StringValue("b")));
+        var earlier = new Diagnostic(
+                DiagnosticSeverity.WARNING,
+                CanonicalIdentifier.parse("mcad:warning"),
+                "same",
+                Optional.empty(),
+                Map.of(detailKey, new MetadataValue.StringValue("a")));
+
+        var result = new PreflightResult(List.of(later, earlier));
+        var firstValue = (MetadataValue.StringValue) result.diagnostics().getFirst().details().get(detailKey);
+        assertEquals("a", firstValue.value());
+    }
+
+    @Test
+    void producedFilesRejectTraversalDuplicatePathsAndFailedPublication() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProducedFile("../model.obj", 1, Optional.empty(), Optional.empty()));
         var file = new ProducedFile("model.obj", 1, Optional.of("model/obj"), Optional.empty());
+        var conflictingFile = new ProducedFile("model.obj", 2, Optional.of("model/obj"), Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> new ExportResult(
+                ExportStatus.SUCCESS, List.of(file, conflictingFile), List.of()));
         assertThrows(IllegalArgumentException.class, () -> new ExportResult(
                 ExportStatus.CANCELLED, List.of(file), List.of()));
     }
