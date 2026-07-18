@@ -1,0 +1,9 @@
+{
+  "key.category.m_plus_cad.main": "m+CAD",
+  "key.m_plus_cad.set_start": "Set selection start",
+  "key.m_plus_cad.set_end": "Set selection end",
+  "key.m_plus_cad.clear_selection": "Clear selection",
+  "key.m_plus_cad.open_settings": "Open m+CAD settings",
+  "key.m_plus_cad.export": "Start export",
+  "key.m_plus_cad.cancel": "Cancel operation"
+}
