@@ -27,8 +27,19 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 
-/** Complete loader-independent processing path used by the Fabric runtime and end-to-end tests. */
+/** Complete loader-independent processing path used by Fabric, live link, and end-to-end tests. */
 public final class MvpPipeline {
+    public record SceneBuild(
+            StructureSnapshot processedSnapshot,
+            MarkerInterpretationResult markerResult,
+            GeneratedScene scene) {
+        public SceneBuild {
+            Objects.requireNonNull(processedSnapshot, "processedSnapshot");
+            Objects.requireNonNull(markerResult, "markerResult");
+            Objects.requireNonNull(scene, "scene");
+        }
+    }
+
     public record Output(
             StructureSnapshot processedSnapshot,
             MarkerInterpretationResult markerResult,
@@ -59,19 +70,15 @@ public final class MvpPipeline {
         this.materialResolver = Objects.requireNonNull(materialResolver, "materialResolver");
     }
 
-    public Output run(
+    public SceneBuild buildScene(
             StructureSnapshot snapshot,
             ProjectSettings settings,
             MarkerRuleSet markerRules,
-            ModelExporter exporter,
-            Path destination,
             ProgressReporter progress,
-            CancellationToken cancellation) throws IOException {
+            CancellationToken cancellation) {
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(settings, "settings");
         Objects.requireNonNull(markerRules, "markerRules");
-        Objects.requireNonNull(exporter, "exporter");
-        Objects.requireNonNull(destination, "destination");
         Objects.requireNonNull(progress, "progress");
         Objects.requireNonNull(cancellation, "cancellation");
 
@@ -95,9 +102,23 @@ public final class MvpPipeline {
         GeneratedScene generated = meshGenerator.generate(processed, settings, cancellation, progress);
         GeneratedScene scene = SceneAssembler.assemble(
                 generated, processed, settings, markerResult, materialResolver);
+        return new SceneBuild(processed, markerResult, scene);
+    }
+
+    public Output run(
+            StructureSnapshot snapshot,
+            ProjectSettings settings,
+            MarkerRuleSet markerRules,
+            ModelExporter exporter,
+            Path destination,
+            ProgressReporter progress,
+            CancellationToken cancellation) throws IOException {
+        Objects.requireNonNull(exporter, "exporter");
+        Objects.requireNonNull(destination, "destination");
+        SceneBuild build = buildScene(snapshot, settings, markerRules, progress, cancellation);
         ExportOptions options = exportOptions(settings, exporter);
-        ExportResult result = exporter.export(scene, destination, options, progress, cancellation);
-        return new Output(processed, markerResult, scene, result);
+        ExportResult result = exporter.export(build.scene(), destination, options, progress, cancellation);
+        return new Output(build.processedSnapshot(), build.markerResult(), build.scene(), result);
     }
 
     public static ExportOptions exportOptions(ProjectSettings settings, ModelExporter exporter) {
