@@ -4,6 +4,7 @@
 package dev.sakus.mcad.livelink;
 
 import dev.sakus.mcad.api.GeneratedScene;
+import dev.sakus.mcad.api.Transform;
 
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -78,9 +79,17 @@ public final class LiveLinkSession implements AutoCloseable {
     }
 
     public synchronized PublishResult publish(GeneratedScene scene, boolean forceFull) {
+        return publish(scene, Transform.IDENTITY, forceFull);
+    }
+
+    public synchronized PublishResult publish(
+            GeneratedScene scene,
+            Transform displayTransform,
+            boolean forceFull) {
         Objects.requireNonNull(scene, "scene");
+        Objects.requireNonNull(displayTransform, "displayTransform");
         LoopbackWebSocketServer currentServer = requireRunning();
-        LiveSceneSnapshot current = LiveSceneSnapshot.capture(scene);
+        LiveSceneSnapshot current = LiveSceneSnapshot.capture(scene, displayTransform);
         long nextRevision = Math.incrementExact(revision);
         SceneDeltaEncoder.EncodedUpdate update = encoder.encode(previous, current, nextRevision, forceFull);
         SceneDeltaEncoder.EncodedUpdate full = encoder.encode(null, current, nextRevision, true);
