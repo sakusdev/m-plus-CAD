@@ -10,10 +10,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.TreeSet;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 final class FabricClientSnapshotWorldViewTest {
+    @BeforeAll
+    static void bootstrapMinecraftRegistries() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
+
     @Test
     void mapsNegativeAndBoundaryBlockCoordinatesToTheCorrectChunks() {
         assertEquals(-2, FabricClientSnapshotWorldView.chunkCoordinate(-17));
