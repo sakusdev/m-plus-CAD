@@ -4,6 +4,9 @@
 package dev.sakus.mcad.core.mesh;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import org.junit.jupiter.api.Test;
 
 /** JUnit Platform adapter for the existing self-contained mesh contract scenarios. */
@@ -42,7 +45,20 @@ final class FullCubeMeshGeneratorJUnitTest {
 
     @Test
     void outputIsDeterministicAndMatchesFixture() throws IOException {
-        delegate.outputIsDeterministicAndMatchesFixture();
+        Path expectedLocation = Path.of("fixtures/mesh/full-cube-deterministic.txt");
+        boolean copiedForModuleWorkingDirectory = !Files.exists(expectedLocation);
+        if (copiedForModuleWorkingDirectory) {
+            Path repositoryFixture = Path.of("..", "fixtures", "mesh", "full-cube-deterministic.txt");
+            Files.createDirectories(expectedLocation.getParent());
+            Files.copy(repositoryFixture, expectedLocation, StandardCopyOption.REPLACE_EXISTING);
+        }
+        try {
+            delegate.outputIsDeterministicAndMatchesFixture();
+        } finally {
+            if (copiedForModuleWorkingDirectory) {
+                Files.deleteIfExists(expectedLocation);
+            }
+        }
     }
 
     @Test
