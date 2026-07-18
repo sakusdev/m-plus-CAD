@@ -3,8 +3,10 @@
  */
 package dev.sakus.mcad.gltf;
 
+import dev.sakus.mcad.api.CameraDefinition;
 import dev.sakus.mcad.api.CancellationToken;
 import dev.sakus.mcad.api.GeneratedScene;
+import dev.sakus.mcad.api.LightDefinition;
 import dev.sakus.mcad.api.MeshGroup;
 import dev.sakus.mcad.api.SceneNode;
 import dev.sakus.mcad.api.Transform;
@@ -18,6 +20,8 @@ import java.util.Map;
 import java.util.Set;
 
 final class GltfNodeBuilder {
+    private static final String LIGHTS_EXTENSION = "KHR_lights_punctual";
+
     private final GeneratedScene scene;
     private final GltfOptions options;
     private final CancellationToken cancellation;
@@ -28,7 +32,10 @@ final class GltfNodeBuilder {
         this.cancellation = cancellation;
     }
 
-    NodeOutput build(Map<String, Integer> meshIndices) {
+    NodeOutput build(
+            Map<String, Integer> meshIndices,
+            Map<String, Integer> lightIndices,
+            Map<String, Integer> cameraIndices) {
         List<Object> nodes = new ArrayList<>();
         Map<String, Integer> nodeIndices = new HashMap<>();
         for (SceneNode node : scene.nodes()) {
@@ -72,15 +79,13 @@ final class GltfNodeBuilder {
             roots.add(nodeIndices.get(rootNodeId));
         }
         addUnattachedMeshes(meshIndices, nodes, roots, referencedMeshes);
-        if (!roots.isEmpty() && !options.transform().equals(Transform.IDENTITY)) {
-            LinkedHashMap<String, Object> exportRoot = new LinkedHashMap<>();
-            exportRoot.put("name", "m+CAD Export Transform");
-            GltfValueEncoder.putTransform(exportRoot, options.transform());
-            exportRoot.put("children", List.copyOf(roots));
-            exportRoot.put("extras", Map.of("mcadStableId", "synthetic/export-transform"));
-            roots = new ArrayList<>(List.of(nodes.size()));
-            nodes.add(exportRoot);
-        }
+        addLights(lightIndices, nodes, roots);
+        addCameras(cameraIndices, nodes, roots);
+
+        roots = wrapTransform(nodes, roots, SceneContractAdapter.originTransform(scene),
+                "m+CAD Scene Origin", "synthetic/scene-origin");
+        roots = wrapTransform(nodes, roots, options.transform(),
+                "m+CAD Export Transform", "synthetic/export-transform");
         return new NodeOutput(List.copyOf(nodes), List.copyOf(roots));
     }
 
@@ -118,6 +123,79 @@ final class GltfNodeBuilder {
                 nodes.add(unattached);
             }
         }
+    }
+
+    private void addLights(
+            Map<String, Integer> lightIndices,
+            List<Object> nodes,
+            List<Integer> roots) {
+        for (LightDefinition light : scene.lights()) {
+            Integer lightIndex = lightIndices.get(light.stableId());
+            if (lightIndex == null) {
+                continue;
+            }
+            cancellation.throwIfCancellationRequested();
+            LinkedHashMap<String, Object> node = new LinkedHashMap<>();
+            node.put("name", GltfNames.sanitize(light.name(), light.stableId()));
+            GltfValueEncoder.putTransform(node, SceneContractAdapter.transform(light));
+            LinkedHashMap<String, Object> reference = new LinkedHashMap<>();
+            reference.put("light", lightIndex);
+            LinkedHashMap<String, Object> extensions = new LinkedHashMap<>();
+            extensions.put(LIGHTS_EXTENSION, reference);
+            node.put("extensions", extensions);
+            node.put("extras", elementExtras(light.stableId(), light));
+            roots.add(nodes.size());
+            nodes.add(node);
+        }
+    }
+
+    private void addCameras(
+            Map<String, Integer> cameraIndices,
+            List<Object> nodes,
+            List<Integer> roots) {
+        for (CameraDefinition camera : scene.cameras()) {
+            Integer cameraIndex = cameraIndices.get(camera.stableId());
+            if (cameraIndex == null) {
+                continue;
+            }
+            cancellation.throwIfCancellationRequested();
+            LinkedHashMap<String, Object> node = new LinkedHashMap<>();
+            node.put("name", GltfNames.sanitize(camera.name(), camera.stableId()));
+            GltfValueEncoder.putTransform(node, SceneContractAdapter.transform(camera));
+            node.put("camera", cameraIndex);
+            node.put("extras", elementExtras(camera.stableId(), camera));
+            roots.add(nodes.size());
+            nodes.add(node);
+        }
+    }
+
+    private static LinkedHashMap<String, Object> elementExtras(String stableId, Object element) {
+        LinkedHashMap<String, Object> extras = new LinkedHashMap<>();
+        extras.put("mcadStableId", stableId);
+        List<?> sources = SceneContractAdapter.sourceReferences(element);
+        if (!sources.isEmpty()) {
+            extras.put("mcadSourceReferences", GltfValueEncoder.neutral(sources));
+        }
+        return extras;
+    }
+
+    private static List<Integer> wrapTransform(
+            List<Object> nodes,
+            List<Integer> roots,
+            Transform transform,
+            String name,
+            String stableId) {
+        if (roots.isEmpty() || transform.equals(Transform.IDENTITY)) {
+            return roots;
+        }
+        LinkedHashMap<String, Object> wrapper = new LinkedHashMap<>();
+        wrapper.put("name", name);
+        GltfValueEncoder.putTransform(wrapper, transform);
+        wrapper.put("children", List.copyOf(roots));
+        wrapper.put("extras", Map.of("mcadStableId", stableId));
+        List<Integer> wrappedRoots = new ArrayList<>(List.of(nodes.size()));
+        nodes.add(wrapper);
+        return wrappedRoots;
     }
 
     record NodeOutput(List<Object> nodes, List<Integer> rootIndices) {
