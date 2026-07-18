@@ -3,6 +3,8 @@
  */
 package dev.sakus.mcad.gltf;
 
+import static dev.sakus.mcad.gltf.GltfTestFixtures.bone;
+import static dev.sakus.mcad.gltf.GltfTestFixtures.curve;
 import static dev.sakus.mcad.gltf.GltfTestFixtures.glbJson;
 import static dev.sakus.mcad.gltf.GltfTestFixtures.material;
 import static dev.sakus.mcad.gltf.GltfTestFixtures.mesh;
@@ -13,10 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.sakus.mcad.api.BoneDefinition;
 import dev.sakus.mcad.api.CancellationToken;
 import dev.sakus.mcad.api.CanonicalIdentifier;
-import dev.sakus.mcad.api.CurveDefinition;
 import dev.sakus.mcad.api.DiagnosticSeverity;
 import dev.sakus.mcad.api.ExportOptions;
 import dev.sakus.mcad.api.ExportResult;
@@ -25,8 +25,6 @@ import dev.sakus.mcad.api.GeneratedScene;
 import dev.sakus.mcad.api.MeshGroup;
 import dev.sakus.mcad.api.MetadataValue;
 import dev.sakus.mcad.api.ProgressReporter;
-import dev.sakus.mcad.api.Transform;
-import dev.sakus.mcad.api.Vec3d;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,12 +44,9 @@ final class GltfExporterSafetyTest {
 
     @Test
     void unsupportedSceneElementsAreDiagnosedAndPreservedInExtras() throws Exception {
-        CurveDefinition curve = new CurveDefinition(
-                "curve/path", "Path", List.of(Vec3d.ZERO, Vec3d.ONE), false);
-        BoneDefinition bone = new BoneDefinition(
-                "bone/root", "Root Bone", Optional.empty(), Transform.IDENTITY);
         GeneratedScene scene = scene(
-                List.of(mesh("mesh/triangle", Optional.empty(), false)), List.of(), List.of(curve), List.of(bone));
+                List.of(mesh("mesh/triangle", Optional.empty(), false)),
+                List.of(), List.of(curve()), List.of(bone()));
 
         var warningPreflight = exporter.preflight(scene, ExportOptions.EMPTY);
         assertTrue(warningPreflight.canExport());

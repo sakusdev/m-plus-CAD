@@ -38,6 +38,8 @@ public final class GltfExporter implements ModelExporter {
                     ExporterFeature.VERTEX_COLOURS,
                     ExporterFeature.ALPHA_MODES,
                     ExporterFeature.CUSTOM_PROPERTIES,
+                    ExporterFeature.LIGHTS,
+                    ExporterFeature.CAMERAS,
                     ExporterFeature.COLLISION_METADATA,
                     ExporterFeature.EMBEDDED_BINARY_ASSETS,
                     ExporterFeature.EXTERNAL_FILE_SETS),
