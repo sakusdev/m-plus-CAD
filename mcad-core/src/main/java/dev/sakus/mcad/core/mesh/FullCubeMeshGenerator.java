@@ -174,6 +174,7 @@ public final class FullCubeMeshGenerator {
         return new GeneratedScene(
                 ApiVersions.GENERATED_SCENE,
                 "scene/" + snapshot.snapshotId() + "/full-cube-v1",
+                Transform.IDENTITY,
                 List.of(root.stableId()),
                 List.of(root),
                 meshes,
@@ -386,7 +387,7 @@ public final class FullCubeMeshGenerator {
                     Optional.empty(),
                     List.of(),
                     Map.of());
-            return new MeshGroup(stableId, blockId.toString(), List.of(primitive), Map.of());
+            return new MeshGroup(stableId, blockId.toString(), List.of(primitive), Map.of(), List.of());
         }
     }
 }
