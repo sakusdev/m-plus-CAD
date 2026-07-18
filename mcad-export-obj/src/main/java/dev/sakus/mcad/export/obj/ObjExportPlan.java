@@ -89,12 +89,13 @@ record ObjExportPlan(
         });
 
         ObjTransform global = ObjTransform.global(settings);
+        ObjTransform sceneOrigin = ObjTransform.fromTransform(scene.originTransform());
         ObjNameAllocator objectAllocator = new ObjNameAllocator();
         List<MeshInstance> instances = new ArrayList<>();
         for (InstanceSeed seed : seeds) {
             ObjNameAllocator.Allocation allocation = objectAllocator.allocate(seed.mesh().name(), "object");
             nameDiagnostics.record(allocation);
-            ObjTransform transform = global.after(seed.worldTransform());
+            ObjTransform transform = global.after(sceneOrigin).after(seed.worldTransform());
             transform.validateForNormals();
             instances.add(new MeshInstance(seed.nodeId(), seed.mesh(), allocation.allocated(), transform));
         }
