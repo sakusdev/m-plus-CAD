@@ -44,7 +44,7 @@ class SceneAssemblerTest {
                 List.of(
                         new MarkerDirective.Origin("origin/ignored", new Vec3d(1, 0, 0), List.of(source)),
                         new MarkerDirective.PointLight(
-                                "light/key", "Key", Transform.IDENTITY, Color3d.WHITE, 4.0,
+                                "light/key", "Key", Transform.IDENTITY, new Color3d(1.0, 1.0, 1.0), 4.0,
                                 OptionalDouble.of(12.0), List.of(source))),
                 List.of(),
                 List.of());
