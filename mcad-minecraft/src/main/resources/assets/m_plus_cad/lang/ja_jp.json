@@ -1,0 +1,9 @@
+{
+  "key.category.m_plus_cad.main": "m+CAD",
+  "key.m_plus_cad.set_start": "選択の始点を設定",
+  "key.m_plus_cad.set_end": "選択の終点を設定",
+  "key.m_plus_cad.clear_selection": "選択を解除",
+  "key.m_plus_cad.open_settings": "m+CAD設定を開く",
+  "key.m_plus_cad.export": "エクスポートを開始",
+  "key.m_plus_cad.cancel": "処理をキャンセル"
+}
