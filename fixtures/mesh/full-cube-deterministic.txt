@@ -1,0 +1,5 @@
+scene=scene/deterministic/full-cube-v1
+meshes=mesh/block/example/a,mesh/block/example/b
+stats=3,14,4,56,28,2,0
+mesh/block/example/a=36,18,9
+mesh/block/example/b=20,10,5

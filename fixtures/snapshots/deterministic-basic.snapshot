@@ -1,0 +1,7 @@
+# m+CAD snapshot determinism fixture, schema 1
+# No Minecraft assets or serialized platform objects are included.
+selectionMin=-2,10,5
+selectionMaxExclusive=1,12,7
+retainedBlocks=2
+omittedAirCells=10
+expectedSnapshotId=sha256:408300890a3f0b850eeb983630c4a128b79491c2d8cfb1778176555692c828e0
