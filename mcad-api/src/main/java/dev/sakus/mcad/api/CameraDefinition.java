@@ -4,20 +4,25 @@
 package dev.sakus.mcad.api;
 
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.OptionalDouble;
 
 public record CameraDefinition(
         String stableId,
         String name,
+        Transform transform,
         CameraProjection projection,
         double nearPlane,
         OptionalDouble farPlane,
         OptionalDouble verticalFieldOfViewRadians,
-        OptionalDouble orthographicHeight) {
+        OptionalDouble orthographicHeight,
+        List<SourceReference> sourceReferences) {
 
     public CameraDefinition {
         Checks.stableId(stableId, "stableId");
         Checks.nonBlank(name, "name");
+        Checks.notNull(transform, "transform");
         Checks.notNull(projection, "projection");
         Checks.finite(nearPlane, "nearPlane");
         if (nearPlane <= 0.0) {
@@ -49,5 +54,9 @@ public record CameraDefinition(
                 throw new IllegalArgumentException("orthographicHeight must be positive");
             }
         }
+        sourceReferences = Checks.immutableDistinctSortedList(
+                sourceReferences,
+                Comparator.comparing(SourceReference::stableSortKey),
+                "sourceReferences");
     }
 }

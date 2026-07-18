@@ -4,6 +4,7 @@
 package dev.sakus.mcad.api;
 
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -20,7 +21,8 @@ public record MaterialDefinition(
         AlphaMode alphaMode,
         OptionalDouble alphaCutoff,
         List<UserAssetReference> externalUserAssetReferences,
-        NavigableMap<CanonicalIdentifier, MetadataValue> customProperties) {
+        NavigableMap<CanonicalIdentifier, MetadataValue> customProperties,
+        List<SourceReference> sourceReferences) {
 
     public MaterialDefinition(
             String stableId,
@@ -33,10 +35,12 @@ public record MaterialDefinition(
             AlphaMode alphaMode,
             OptionalDouble alphaCutoff,
             List<UserAssetReference> externalUserAssetReferences,
-            Map<CanonicalIdentifier, MetadataValue> customProperties) {
+            Map<CanonicalIdentifier, MetadataValue> customProperties,
+            List<SourceReference> sourceReferences) {
         this(stableId, name, baseColour, metallic, roughness, emissiveColour, emissiveStrength,
                 alphaMode, alphaCutoff, externalUserAssetReferences,
-                Checks.immutableSortedMap(customProperties, CanonicalIdentifier::compareTo, "customProperties"));
+                Checks.immutableSortedMap(customProperties, CanonicalIdentifier::compareTo, "customProperties"),
+                sourceReferences);
     }
 
     public MaterialDefinition {
@@ -58,10 +62,15 @@ public record MaterialDefinition(
         if (alphaMode != AlphaMode.MASK && alphaCutoff.isPresent()) {
             throw new IllegalArgumentException("alphaCutoff is only valid for MASK materials");
         }
-        externalUserAssetReferences = Checks.immutableSortedList(
-                externalUserAssetReferences, UserAssetReference::compareTo, "externalUserAssetReferences");
-        Checks.requireNoDuplicates(externalUserAssetReferences, "externalUserAssetReferences");
+        externalUserAssetReferences = Checks.immutableDistinctSortedList(
+                externalUserAssetReferences,
+                UserAssetReference::compareTo,
+                "externalUserAssetReferences");
         customProperties = Checks.immutableSortedMap(
                 customProperties, CanonicalIdentifier::compareTo, "customProperties");
+        sourceReferences = Checks.immutableDistinctSortedList(
+                sourceReferences,
+                Comparator.comparing(SourceReference::stableSortKey),
+                "sourceReferences");
     }
 }

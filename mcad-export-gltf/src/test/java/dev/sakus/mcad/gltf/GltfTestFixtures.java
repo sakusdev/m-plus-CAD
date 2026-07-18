@@ -136,7 +136,7 @@ final class GltfTestFixtures {
                 materialId,
                 colours,
                 Map.of(new CanonicalIdentifier("test", "weight"), List.of(0.0, 0.5, 1.0)));
-        return new MeshGroup(id, id, List.of(primitive), Map.of());
+        return new MeshGroup(id, id, List.of(primitive), Map.of(), List.of());
     }
 
     static MaterialDefinition material() {
@@ -151,7 +151,8 @@ final class GltfTestFixtures {
                 AlphaMode.BLEND,
                 OptionalDouble.empty(),
                 List.of(),
-                Map.of());
+                Map.of(),
+                List.of());
     }
 
     static CurveDefinition curve() {

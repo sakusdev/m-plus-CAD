@@ -177,7 +177,6 @@ class ObjExporterTest {
         assertEquals(ExportStatus.SUCCESS, exporter.export(
                 scene, secondDirectory.resolve("model.obj"), ExportOptions.EMPTY,
                 ProgressReporter.NONE, CancellationToken.NONE).status());
-
         assertArrayEquals(
                 Files.readAllBytes(firstDirectory.resolve("model.obj")),
                 Files.readAllBytes(secondDirectory.resolve("model.obj")));
@@ -214,6 +213,7 @@ class ObjExporterTest {
         return new GeneratedScene(
                 ApiVersions.GENERATED_SCENE,
                 "scene/test",
+                Transform.IDENTITY,
                 List.of(root.stableId()),
                 List.of(root),
                 groups,
@@ -224,7 +224,7 @@ class ObjExporterTest {
     }
 
     private static MeshGroup group(String id, String name, MeshPrimitive primitive) {
-        return new MeshGroup(id, name, List.of(primitive), Map.of());
+        return new MeshGroup(id, name, List.of(primitive), Map.of(), List.of());
     }
 
     private static MaterialDefinition defaultMaterial(String id, String name) {
@@ -233,7 +233,7 @@ class ObjExporterTest {
                 new Color4d(0.5, 0.25, 0.125, 1.0),
                 0.0, 1.0,
                 new Color3d(0.0, 0.0, 0.0), 0.0,
-                AlphaMode.OPAQUE, OptionalDouble.empty(), List.of(), Map.of());
+                AlphaMode.OPAQUE, OptionalDouble.empty(), List.of(), Map.of(), List.of());
     }
 
     private static MeshPrimitive trianglePrimitive(String materialId) {
