@@ -25,5 +25,6 @@ include(
     "mcad-markers",
     "mcad-export-obj",
     "mcad-export-gltf",
+    "mcad-live-link",
     "mcad-minecraft",
 )
