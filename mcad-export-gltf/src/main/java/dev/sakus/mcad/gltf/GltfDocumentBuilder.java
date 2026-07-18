@@ -4,24 +4,32 @@
 package dev.sakus.mcad.gltf;
 
 import dev.sakus.mcad.api.AlphaMode;
+import dev.sakus.mcad.api.CameraDefinition;
+import dev.sakus.mcad.api.CameraProjection;
 import dev.sakus.mcad.api.CancellationToken;
 import dev.sakus.mcad.api.CanonicalIdentifier;
 import dev.sakus.mcad.api.Color3d;
 import dev.sakus.mcad.api.GeneratedScene;
+import dev.sakus.mcad.api.LightDefinition;
+import dev.sakus.mcad.api.LightType;
 import dev.sakus.mcad.api.MaterialDefinition;
 import dev.sakus.mcad.api.MeshGroup;
 import dev.sakus.mcad.api.MeshPrimitive;
+import dev.sakus.mcad.api.Transform;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
 final class GltfDocumentBuilder {
+    private static final String LIGHTS_EXTENSION = "KHR_lights_punctual";
+
     private final GeneratedScene scene;
     private final GltfOptions options;
     private final CancellationToken cancellation;
@@ -51,8 +59,26 @@ final class GltfDocumentBuilder {
             document.put("meshes", meshes);
         }
 
+        Map<String, Integer> lightIndices = new HashMap<>();
+        List<Object> lights = buildLights(lightIndices);
+        if (!lights.isEmpty()) {
+            extensionsUsed.add(LIGHTS_EXTENSION);
+            LinkedHashMap<String, Object> punctual = new LinkedHashMap<>();
+            punctual.put("lights", lights);
+            LinkedHashMap<String, Object> extensions = new LinkedHashMap<>();
+            extensions.put(LIGHTS_EXTENSION, punctual);
+            document.put("extensions", extensions);
+        }
+
+        Map<String, Integer> cameraIndices = new HashMap<>();
+        List<Object> cameras = buildCameras(cameraIndices);
+        if (!cameras.isEmpty()) {
+            document.put("cameras", cameras);
+        }
+
         GltfNodeBuilder.NodeOutput nodeOutput =
-                new GltfNodeBuilder(scene, options, cancellation).build(meshIndices);
+                new GltfNodeBuilder(scene, options, cancellation)
+                        .build(meshIndices, lightIndices, cameraIndices);
         if (!nodeOutput.nodes().isEmpty()) {
             document.put("nodes", nodeOutput.nodes());
         }
@@ -205,10 +231,83 @@ final class GltfDocumentBuilder {
         return output;
     }
 
+    private List<Object> buildLights(Map<String, Integer> lightIndices) {
+        List<Object> result = new ArrayList<>();
+        for (LightDefinition light : scene.lights()) {
+            cancellation.throwIfCancellationRequested();
+            lightIndices.put(light.stableId(), result.size());
+            LinkedHashMap<String, Object> output = new LinkedHashMap<>();
+            output.put("name", GltfNames.sanitize(light.name(), light.stableId()));
+            output.put("type", light.type().name().toLowerCase(Locale.ROOT));
+            output.put("color", List.of(light.colour().red(), light.colour().green(), light.colour().blue()));
+            output.put("intensity", light.intensity());
+            light.range().ifPresent(value -> output.put("range", value));
+            if (light.type() == LightType.SPOT) {
+                LinkedHashMap<String, Object> spot = new LinkedHashMap<>();
+                light.innerConeRadians().ifPresent(value -> spot.put("innerConeAngle", value));
+                light.outerConeRadians().ifPresent(value -> spot.put("outerConeAngle", value));
+                if (!spot.isEmpty()) {
+                    output.put("spot", spot);
+                }
+            }
+            output.put("extras", elementExtras(light.stableId(), light));
+            result.add(output);
+        }
+        return List.copyOf(result);
+    }
+
+    private List<Object> buildCameras(Map<String, Integer> cameraIndices) {
+        List<Object> result = new ArrayList<>();
+        for (CameraDefinition camera : scene.cameras()) {
+            cancellation.throwIfCancellationRequested();
+            if (camera.projection() == CameraProjection.ORTHOGRAPHIC && camera.farPlane().isEmpty()) {
+                continue;
+            }
+            cameraIndices.put(camera.stableId(), result.size());
+            LinkedHashMap<String, Object> output = new LinkedHashMap<>();
+            output.put("name", GltfNames.sanitize(camera.name(), camera.stableId()));
+            if (camera.projection() == CameraProjection.PERSPECTIVE) {
+                output.put("type", "perspective");
+                LinkedHashMap<String, Object> perspective = new LinkedHashMap<>();
+                perspective.put("yfov", camera.verticalFieldOfViewRadians().orElseThrow());
+                perspective.put("znear", camera.nearPlane());
+                camera.farPlane().ifPresent(value -> perspective.put("zfar", value));
+                output.put("perspective", perspective);
+            } else {
+                output.put("type", "orthographic");
+                double magnification = camera.orthographicHeight().orElseThrow() / 2.0;
+                LinkedHashMap<String, Object> orthographic = new LinkedHashMap<>();
+                orthographic.put("xmag", magnification);
+                orthographic.put("ymag", magnification);
+                orthographic.put("znear", camera.nearPlane());
+                orthographic.put("zfar", camera.farPlane().orElseThrow());
+                output.put("orthographic", orthographic);
+            }
+            output.put("extras", elementExtras(camera.stableId(), camera));
+            result.add(output);
+        }
+        return List.copyOf(result);
+    }
+
+    private static LinkedHashMap<String, Object> elementExtras(String stableId, Object element) {
+        LinkedHashMap<String, Object> extras = new LinkedHashMap<>();
+        extras.put("mcadStableId", stableId);
+        List<?> sources = SceneContractAdapter.sourceReferences(element);
+        if (!sources.isEmpty()) {
+            extras.put("mcadSourceReferences", GltfValueEncoder.neutral(sources));
+        }
+        return extras;
+    }
+
     private Object sceneExtras() {
         LinkedHashMap<String, Object> extras = GltfValueEncoder.baseExtras(
                 scene.sceneId(), scene.customProperties());
-        extras.put("mcadEffectiveExportTransform", GltfValueEncoder.transform(options.transform()));
+        Transform origin = SceneContractAdapter.originTransform(scene);
+        extras.put("mcadOriginTransform", GltfValueEncoder.transform(origin));
+        extras.put("mcadConfiguredExportTransform", GltfValueEncoder.transform(options.transform()));
+        extras.put("mcadEffectiveExportTransformChain", List.of(
+                GltfValueEncoder.transform(origin),
+                GltfValueEncoder.transform(options.transform())));
         if (!scene.collisions().isEmpty()) {
             extras.put("mcadCollisions", GltfValueEncoder.neutral(scene.collisions()));
         }
