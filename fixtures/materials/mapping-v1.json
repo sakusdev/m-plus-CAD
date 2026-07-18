@@ -1,0 +1,22 @@
+{
+  "schemaVersion": {"major": 1, "minor": 0},
+  "mappings": [
+    {
+      "blockId": "minecraft:stone",
+      "material": {
+        "stableId": "user.material.polished_stone",
+        "name": "Polished Stone",
+        "baseColour": [0.21, 0.23, 0.26, 1.0],
+        "metallic": 0.05,
+        "roughness": 0.42,
+        "emissiveColour": [0.0, 0.0, 0.0],
+        "emissiveStrength": 0.0,
+        "alphaMode": "OPAQUE",
+        "alphaCutoff": null,
+        "assets": [
+          {"projectRelativePath": "assets/materials/polished-stone.png", "copyOnExport": false}
+        ]
+      }
+    }
+  ]
+}
