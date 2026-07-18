@@ -3,7 +3,9 @@
  */
 package dev.sakus.mcad.gltf;
 
+import static dev.sakus.mcad.gltf.GltfTestFixtures.camera;
 import static dev.sakus.mcad.gltf.GltfTestFixtures.glbJson;
+import static dev.sakus.mcad.gltf.GltfTestFixtures.light;
 import static dev.sakus.mcad.gltf.GltfTestFixtures.material;
 import static dev.sakus.mcad.gltf.GltfTestFixtures.mesh;
 import static dev.sakus.mcad.gltf.GltfTestFixtures.numbers;
@@ -20,6 +22,7 @@ import dev.sakus.mcad.api.CanonicalIdentifier;
 import dev.sakus.mcad.api.ExportOptions;
 import dev.sakus.mcad.api.ExportResult;
 import dev.sakus.mcad.api.ExportStatus;
+import dev.sakus.mcad.api.ExporterFeature;
 import dev.sakus.mcad.api.GeneratedScene;
 import dev.sakus.mcad.api.MaterialDefinition;
 import dev.sakus.mcad.api.MeshGroup;
@@ -140,6 +143,27 @@ final class GltfExporterFormatTest {
         assertTrue(json.contains("\"COLOR_0\":"));
         assertTrue(json.contains("KHR_materials_emissive_strength"));
         assertTrue(json.contains("\"emissiveStrength\":2.0"));
+    }
+
+    @Test
+    void mapsLightsAndCamerasToStandardGltfElements() throws Exception {
+        GeneratedScene scene = scene(
+                List.of(mesh("mesh/triangle", Optional.empty(), false)), List.of(), List.of(), List.of(),
+                List.of(light()), List.of(camera()));
+        Path destination = temporaryDirectory.resolve("scene-elements.glb");
+
+        assertEquals(ExportStatus.SUCCESS, exporter.export(
+                scene, destination, ExportOptions.EMPTY, ProgressReporter.NONE, CancellationToken.NONE).status());
+        String json = glbJson(Files.readAllBytes(destination));
+        assertTrue(exporter.capabilities().features().contains(ExporterFeature.LIGHTS));
+        assertTrue(exporter.capabilities().features().contains(ExporterFeature.CAMERAS));
+        assertTrue(json.contains("\"KHR_lights_punctual\""));
+        assertTrue(json.contains("\"type\":\"point\""));
+        assertTrue(json.contains("\"camera\":0"));
+        assertTrue(json.contains("\"type\":\"perspective\""));
+        assertTrue(json.contains("\"yfov\":1.0"));
+        assertTrue(json.contains("light/key"));
+        assertTrue(json.contains("camera/main"));
     }
 
     @Test
