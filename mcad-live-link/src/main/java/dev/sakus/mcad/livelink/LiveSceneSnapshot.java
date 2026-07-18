@@ -56,8 +56,14 @@ public record LiveSceneSnapshot(
     }
 
     public static LiveSceneSnapshot capture(GeneratedScene scene) {
+        return capture(scene, Transform.IDENTITY);
+    }
+
+    public static LiveSceneSnapshot capture(GeneratedScene scene, Transform displayTransform) {
         Objects.requireNonNull(scene, "scene");
+        Objects.requireNonNull(displayTransform, "displayTransform");
         String metadata = "{"
+                + "\"display\":" + transform(displayTransform) + ','
                 + "\"origin\":" + transform(scene.originTransform()) + ','
                 + "\"roots\":" + strings(scene.rootNodeIds()) + ','
                 + "\"schemaVersion\":" + LiveLinkJson.quote(scene.schemaVersion().toString()) + ','
