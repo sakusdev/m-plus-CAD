@@ -124,6 +124,32 @@ public final class LiveLinkController implements AutoCloseable {
             return;
         }
 
+        if (minecraft.level == null || minecraft.player == null) {
+            if (captureSession != null || (buildFuture != null && !buildFuture.isDone())) {
+                cancelPending();
+            }
+            if (scenePublished) {
+                session.clear("world-unavailable");
+                scenePublished = false;
+                publishedSnapshotId = null;
+            }
+            observedSelectionRevision = -1L;
+            forceCapture = true;
+            ticksUntilPoll = 0;
+            message = "ワールド参加待ち";
+            return;
+        }
+
+        if (exportBusy) {
+            if (captureSession != null || (buildFuture != null && !buildFuture.isDone())) {
+                cancelPending();
+            }
+            forceCapture = true;
+            ticksUntilPoll = 0;
+            message = "通常Export完了待ち";
+            return;
+        }
+
         int clients = session.status().clientCount();
         if (clients > previousClientCount) {
             forceCapture = true;
@@ -148,7 +174,7 @@ public final class LiveLinkController implements AutoCloseable {
         if (buildFuture != null && !buildFuture.isDone()) {
             return;
         }
-        if (clients == 0 || exportBusy) {
+        if (clients == 0) {
             return;
         }
         if (!forceCapture && ++ticksUntilPoll < POLL_INTERVAL_TICKS) {
