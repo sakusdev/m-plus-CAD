@@ -10,11 +10,19 @@
 - POSITION/NORMAL/indices accessors
 - POSITIONとindicesのmin/max bounds
 - stable m+CAD IDを保持するextras
+- Scene originとconfigured export transformの明示的なmetadata
 
-Khronos glTF-Validator CLIが利用可能な環境では、次のように検証できます。
+## Khronos glTF Validator
+
+Khronos Group公式のnpm package `gltf-validator` version `2.0.0-dev.3.10`で検証しました。
 
 ```text
-gltf_validator -r basic-triangle.report.json basic-triangle.gltf
+Errors:   0
+Warnings: 0
+Infos:    0
+Hints:    0
 ```
 
-validator binaryを利用できない環境でも、module testがJSON/GLB header、chunk length、alignment、accessor参照、buffer lengthを検査します。
+詳細は `basic-triangle.report.json` に固定しています。再検証時は同じdirectoryでfixtureとbufferを配置し、公式validatorへ`basic-triangle.gltf`を渡してください。
+
+module testでもJSON/GLB header、chunk length、alignment、accessor参照、buffer lengthを検査します。
