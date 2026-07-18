@@ -7,7 +7,10 @@ import dev.sakus.mcad.api.BlockPosition;
 import dev.sakus.mcad.api.CancellationToken;
 import dev.sakus.mcad.api.ProgressReporter;
 import dev.sakus.mcad.api.ProjectSettings;
+import dev.sakus.mcad.api.Quaterniond;
 import dev.sakus.mcad.api.StructureSnapshot;
+import dev.sakus.mcad.api.Transform;
+import dev.sakus.mcad.api.Vec3d;
 import dev.sakus.mcad.livelink.LiveLinkProtocol;
 import dev.sakus.mcad.livelink.LiveLinkSession;
 import dev.sakus.mcad.markers.MarkerRuleSet;
@@ -46,6 +49,8 @@ public final class LiveLinkController implements AutoCloseable {
 
     private static final int SNAPSHOT_CELLS_PER_TICK = 4_096;
     private static final int POLL_INTERVAL_TICKS = 20;
+    private static final Quaterniond BLENDER_Z_UP = new Quaterniond(
+            Math.sin(Math.PI * 0.25), 0.0, 0.0, Math.cos(Math.PI * 0.25));
 
     private final MvpPipeline pipeline;
     private final MarkerRuleSet markerRules;
@@ -289,6 +294,7 @@ public final class LiveLinkController implements AutoCloseable {
             boolean forceFull) {
         long requestedGeneration = Math.incrementExact(generation);
         AtomicBoolean cancellation = buildCancellation;
+        Transform displayTransform = displayTransform(settings.transform());
         buildFuture = worker.submit(() -> {
             try {
                 MvpPipeline.SceneBuild build = pipeline.buildScene(
@@ -298,7 +304,12 @@ public final class LiveLinkController implements AutoCloseable {
                         ProgressReporter.NONE,
                         cancellation::get);
                 minecraft.execute(() -> finishBuild(
-                        requestedGeneration, snapshot.snapshotId(), settingsHash, forceFull, build));
+                        requestedGeneration,
+                        snapshot.snapshotId(),
+                        settingsHash,
+                        forceFull,
+                        displayTransform,
+                        build));
             } catch (CancellationException ignored) {
                 // Superseded selection/settings builds are intentionally discarded.
             } catch (RuntimeException exception) {
@@ -313,11 +324,13 @@ public final class LiveLinkController implements AutoCloseable {
             String snapshotId,
             int settingsHash,
             boolean forceFull,
+            Transform displayTransform,
             MvpPipeline.SceneBuild build) {
         if (requestedGeneration != generation || !session.status().running()) {
             return;
         }
-        LiveLinkSession.PublishResult result = session.publish(build.scene(), forceFull || !scenePublished);
+        LiveLinkSession.PublishResult result = session.publish(
+                build.scene(), displayTransform, forceFull || !scenePublished);
         scenePublished = true;
         publishedSnapshotId = snapshotId;
         publishedSettingsHash = settingsHash;
@@ -337,6 +350,42 @@ public final class LiveLinkController implements AutoCloseable {
             buildFuture.cancel(true);
         }
         buildFuture = null;
+    }
+
+    private static Transform displayTransform(ProjectSettings.TransformSettings settings) {
+        Quaterniond userRotation = eulerQuaternion(settings.rotationDegrees());
+        Quaterniond rotation = multiply(BLENDER_Z_UP, userRotation);
+        double scale = settings.unitScale();
+        return new Transform(Vec3d.ZERO, rotation, new Vec3d(scale, scale, scale));
+    }
+
+    private static Quaterniond eulerQuaternion(Vec3d degrees) {
+        double x = Math.toRadians(degrees.x()) * 0.5;
+        double y = Math.toRadians(degrees.y()) * 0.5;
+        double z = Math.toRadians(degrees.z()) * 0.5;
+        double sx = Math.sin(x);
+        double cx = Math.cos(x);
+        double sy = Math.sin(y);
+        double cy = Math.cos(y);
+        double sz = Math.sin(z);
+        double cz = Math.cos(z);
+        return new Quaterniond(
+                sx * cy * cz + cx * sy * sz,
+                cx * sy * cz - sx * cy * sz,
+                cx * cy * sz + sx * sy * cz,
+                cx * cy * cz - sx * sy * sz);
+    }
+
+    private static Quaterniond multiply(Quaterniond left, Quaterniond right) {
+        return new Quaterniond(
+                left.w() * right.x() + left.x() * right.w()
+                        + left.y() * right.z() - left.z() * right.y(),
+                left.w() * right.y() - left.x() * right.z()
+                        + left.y() * right.w() + left.z() * right.x(),
+                left.w() * right.z() + left.x() * right.y()
+                        - left.y() * right.x() + left.z() * right.w(),
+                left.w() * right.w() - left.x() * right.x()
+                        - left.y() * right.y() - left.z() * right.z());
     }
 
     private static String bounded(String value) {
