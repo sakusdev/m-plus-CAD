@@ -91,13 +91,14 @@ public final class FabricClientSnapshotWorldView implements SnapshotWorldView {
     static NavigableMap<String, String> stateProperties(BlockState state) {
         Objects.requireNonNull(state, "state");
         var values = new TreeMap<String, String>();
-        for (var entry : state.getValues().entrySet()) {
-            String propertyName = entry.getKey().getName();
-            String previous = values.put(propertyName, propertyValueName(entry.getKey(), entry.getValue()));
+        state.getValues().forEach(entry -> {
+            Property<?> property = entry.property();
+            String propertyName = property.getName();
+            String previous = values.put(propertyName, propertyValueName(property, entry.value()));
             if (previous != null) {
                 throw new IllegalStateException("duplicate Minecraft state property name: " + propertyName);
             }
-        }
+        });
         return values;
     }
 
