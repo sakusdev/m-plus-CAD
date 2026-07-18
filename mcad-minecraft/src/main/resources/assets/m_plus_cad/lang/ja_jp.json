@@ -5,5 +5,7 @@
   "key.m_plus_cad.clear_selection": "選択を解除",
   "key.m_plus_cad.open_settings": "m+CAD設定を開く",
   "key.m_plus_cad.export": "エクスポートを開始",
-  "key.m_plus_cad.cancel": "処理をキャンセル"
+  "key.m_plus_cad.cancel": "処理をキャンセル",
+  "key.m_plus_cad.toggle_live_link": "Blender Live Linkを開始・停止",
+  "key.m_plus_cad.sync_live_link": "Blenderへ即時同期"
 }
