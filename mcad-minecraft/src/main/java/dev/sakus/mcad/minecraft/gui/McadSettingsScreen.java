@@ -11,7 +11,6 @@ import dev.sakus.mcad.minecraft.selection.SelectionOverlayModel;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -64,7 +63,9 @@ public final class McadSettingsScreen extends Screen {
         add(left, y, columnWidth, "設定を保存", this::save);
         add(right, y, columnWidth, runtime.busy() ? "処理中—キャンセル" : "エクスポート開始", this::startOrCancel);
         y += ROW_STEP;
-        add(width / 2 - columnWidth / 2, y, columnWidth, "閉じる", this::onClose);
+        addRenderableWidget(Button.builder(Component.literal("閉じる"), button -> onClose())
+                .bounds(width / 2 - columnWidth / 2, y, columnWidth, BUTTON_HEIGHT)
+                .build());
     }
 
     @Override
@@ -73,8 +74,8 @@ public final class McadSettingsScreen extends Screen {
         graphics.text(font, title, width / 2 - font.width(title) / 2, 14, 0xFFFFFFFF, true);
 
         SelectionOverlayModel overlay = runtime.selectionOverlay();
-        String selection = overlay.bounds().isPresent()
-                ? "選択: " + overlay.dimensionsText() + " / " + overlay.blockCountText()
+        String selection = overlay.wireframe().isPresent()
+                ? "選択: " + overlay.dimensionsLabel() + " / " + overlay.blockCountLabel()
                 : "選択: 始点と終点をキーバインドで指定してください";
         graphics.text(font, selection, 18, height - 42, 0xFFE0E0E0, true);
 
