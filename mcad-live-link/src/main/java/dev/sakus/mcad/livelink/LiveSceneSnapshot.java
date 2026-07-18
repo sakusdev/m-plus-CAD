@@ -62,9 +62,11 @@ public record LiveSceneSnapshot(
     public static LiveSceneSnapshot capture(GeneratedScene scene, Transform displayTransform) {
         Objects.requireNonNull(scene, "scene");
         Objects.requireNonNull(displayTransform, "displayTransform");
+        Transform effectiveRoot = compose(displayTransform, scene.originTransform());
         String metadata = "{"
                 + "\"display\":" + transform(displayTransform) + ','
-                + "\"origin\":" + transform(scene.originTransform()) + ','
+                + "\"sourceOrigin\":" + transform(scene.originTransform()) + ','
+                + "\"origin\":" + transform(effectiveRoot) + ','
                 + "\"roots\":" + strings(scene.rootNodeIds()) + ','
                 + "\"schemaVersion\":" + LiveLinkJson.quote(scene.schemaVersion().toString()) + ','
                 + "\"statistics\":{"
@@ -184,6 +186,59 @@ public record LiveSceneSnapshot(
                 + "\"kind\":" + LiveLinkJson.quote(value.kind().name().toLowerCase(Locale.ROOT)) + ','
                 + "\"meshIds\":" + strings(value.meshIds())
                 + '}';
+    }
+
+    private static Transform compose(Transform outer, Transform inner) {
+        Vec3d scaledTranslation = componentMultiply(outer.scale(), inner.translation());
+        Vec3d rotatedTranslation = rotate(outer.rotation(), scaledTranslation);
+        Vec3d translation = add(outer.translation(), rotatedTranslation);
+        Quaterniond rotation = multiply(outer.rotation(), inner.rotation());
+        Vec3d scale = componentMultiply(outer.scale(), inner.scale());
+        return new Transform(translation, rotation, scale);
+    }
+
+    private static Vec3d rotate(Quaterniond quaternion, Vec3d value) {
+        double magnitude = Math.sqrt(
+                quaternion.x() * quaternion.x()
+                        + quaternion.y() * quaternion.y()
+                        + quaternion.z() * quaternion.z()
+                        + quaternion.w() * quaternion.w());
+        double x = quaternion.x() / magnitude;
+        double y = quaternion.y() / magnitude;
+        double z = quaternion.z() / magnitude;
+        double w = quaternion.w() / magnitude;
+        Vec3d t = new Vec3d(
+                2.0 * (y * value.z() - z * value.y()),
+                2.0 * (z * value.x() - x * value.z()),
+                2.0 * (x * value.y() - y * value.x()));
+        Vec3d cross = new Vec3d(
+                y * t.z() - z * t.y(),
+                z * t.x() - x * t.z(),
+                x * t.y() - y * t.x());
+        return new Vec3d(
+                value.x() + w * t.x() + cross.x(),
+                value.y() + w * t.y() + cross.y(),
+                value.z() + w * t.z() + cross.z());
+    }
+
+    private static Quaterniond multiply(Quaterniond left, Quaterniond right) {
+        return new Quaterniond(
+                left.w() * right.x() + left.x() * right.w()
+                        + left.y() * right.z() - left.z() * right.y(),
+                left.w() * right.y() - left.x() * right.z()
+                        + left.y() * right.w() + left.z() * right.x(),
+                left.w() * right.z() + left.x() * right.y()
+                        - left.y() * right.x() + left.z() * right.w(),
+                left.w() * right.w() - left.x() * right.x()
+                        - left.y() * right.y() - left.z() * right.z());
+    }
+
+    private static Vec3d componentMultiply(Vec3d left, Vec3d right) {
+        return new Vec3d(left.x() * right.x(), left.y() * right.y(), left.z() * right.z());
+    }
+
+    private static Vec3d add(Vec3d left, Vec3d right) {
+        return new Vec3d(left.x() + right.x(), left.y() + right.y(), left.z() + right.z());
     }
 
     private static String transform(Transform value) {
