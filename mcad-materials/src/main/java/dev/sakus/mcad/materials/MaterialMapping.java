@@ -51,7 +51,8 @@ public record MaterialMapping(
                 alphaMode,
                 alphaCutoff,
                 externalUserAssetReferences,
-                Map.of());
+                Map.of(),
+                List.of());
     }
 
     public MaterialDefinition toDefinition() {
@@ -66,6 +67,7 @@ public record MaterialMapping(
                 alphaMode,
                 alphaCutoff,
                 externalUserAssetReferences,
-                Map.of());
+                Map.of(),
+                List.of());
     }
 }
