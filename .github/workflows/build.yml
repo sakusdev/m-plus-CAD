@@ -36,6 +36,7 @@ jobs:
           path: |
             mcad-minecraft/build/libs/*.jar
             !mcad-minecraft/build/libs/*-sources.jar
+            !mcad-minecraft/build/libs/*-javadoc.jar
             !mcad-minecraft/build/libs/*-dev.jar
           if-no-files-found: error
           retention-days: 14
