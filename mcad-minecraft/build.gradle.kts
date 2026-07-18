@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":mcad-markers"))
     implementation(project(":mcad-export-obj"))
     implementation(project(":mcad-export-gltf"))
+    implementation(project(":mcad-live-link"))
 
     include(project(":mcad-api"))
     include(project(":mcad-core"))
@@ -30,6 +31,7 @@ dependencies {
     include(project(":mcad-markers"))
     include(project(":mcad-export-obj"))
     include(project(":mcad-export-gltf"))
+    include(project(":mcad-live-link"))
 
     testImplementation(platform("org.junit:junit-bom:6.1.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
